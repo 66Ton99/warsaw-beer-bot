@@ -31,8 +31,8 @@ export function stateFromMatch(
     return {
       kind: 'found',
       drunk,
-      mine: result.user_rating,
-      global: matched.rating_global,
+      mine: result.user_rating != null ? result.user_rating : null,
+      global: matched.rating_global != null ? matched.rating_global : null,
       unsure,
       untappdId: matched.untappd_id,
       brewery,

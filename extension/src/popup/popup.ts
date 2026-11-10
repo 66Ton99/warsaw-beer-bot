@@ -206,9 +206,18 @@ export function authNoteText(hasToken: boolean, hasInstall = false): string | nu
     : 'Works without Telegram — ⭐ global ratings and ✅ from check-ins you sync into this browser only. A bot token adds recommendations and sync across devices.';
 }
 
+<<<<<<< Updated upstream
 /** Pluralizes a count of beers (parsed cards) — the refresh result's noun, distinct from clear-cache.ts's cache-entry `entries()`. */
 export function beers(n: number): string {
   return n === 1 ? '1 beer' : `${n} beers`;
+=======
+async function triggerPageRefresh(): Promise<void> {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tabId = tabs[0]?.id;
+  if (tabId != null) {
+    await chrome.tabs.sendMessage(tabId, { type: 'refresh-page' });
+  }
+>>>>>>> Stashed changes
 }
 
 // #524: "Refreshed (0 cleared)." is true and reads as failure. `cleared` is the

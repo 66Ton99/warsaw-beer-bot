@@ -23,7 +23,28 @@
   `## [x.y.z] - DATE` (see docs/extension-release.md).
 -->
 
+<<<<<<< Updated upstream
 ## [0.22.0] - 2026-11-08
+=======
+## [0.22.3] - 2026-10-28
+
+- Fixed missing badges and check-in matching on beerrepublic.es:
+  - Resolved `toFixed` runtime error on cards where personal rating was undefined, ensuring badges render reliably.
+  - Added fuzzy matching and style/affix normalization in local database lookup (e.g. matching "Hoegaarden Blanc" against "Brouwerij Hoegaarden / Hoegaarden Wit / Blanche").
+  - Fixed metadata scoping when observer re-parses cards from `#product-grid` container.
+  - Fixed popup "Refresh this page" action message dispatch.
+
+## [0.22.2] - 2026-10-28
+
+- Browser translation resilience (Google Translate): Extracted original untranslated product names and breweries directly from store metadata for beerrepublic.es, ensuring beers like Hoegaarden Blanc match accurately against your Untappd history even when Chrome auto-translates web pages into other languages.
+
+## [0.22.1] - 2026-10-28
+
+- Added support for Beer Republic Spain (https://beerrepublic.es): Warsaw Beer Overlay now badges craft beers, community ratings, and your personal Untappd check-in history directly on beerrepublic.es product collections and searches.
+- Full card attribute parsing on beerrepublic.es: Automatic extraction of brewery from storefront metadata, clean beer name normalization, style badges, accurate ABV parsing, and non-beer merchandise filtering.
+
+## [0.22.0] - 2026-10-28
+>>>>>>> Stashed changes
 
 - Without a Telegram token you can now tap “Sync my check-ins”: your check-ins are kept only in this browser, and shop pages show ✅ for beers you've had and your rating. Clear them any time on the options page.
 

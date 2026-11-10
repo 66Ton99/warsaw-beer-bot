@@ -9,7 +9,7 @@ Untappd. Підтримувані магазини згруповано за к�
   [WineTime](https://winetime.com.ua/), [Flasker](https://flasker.com.ua/)
 - **Польща:** [OneMoreBeer](https://onemorebeer.pl/),
   [Piwne Mosty](https://piwnemosty.pl/), [Funkyshop](https://funkyshop.pl/)
-- **Нідерланди:** [Beer Republic](https://beerrepublic.eu/),
+- **Нідерланди:** [Beer Republic](https://beerrepublic.eu/) (також `beerrepublic.es`),
   [Bierloods22](https://bierloods22.nl/en/), [Hoptimaal](https://hoptimaal.com/en/)
 - **Чехія:** [Beershop](https://beershop.eu/) — один магазин із мовними версіями
   `beershop.pl`, `beershop.cz`, `beershop.sk`, `beershop.eu` і `beershop.de`;

@@ -8,7 +8,7 @@ shop pages. The supported shops, grouped by where they ship from, are:
   [WineTime](https://winetime.com.ua/), [Flasker](https://flasker.com.ua/)
 - **Poland:** [OneMoreBeer](https://onemorebeer.pl/),
   [Piwne Mosty](https://piwnemosty.pl/), [Funkyshop](https://funkyshop.pl/)
-- **The Netherlands:** [Beer Republic](https://beerrepublic.eu/),
+- **The Netherlands:** [Beer Republic](https://beerrepublic.eu/) (including `beerrepublic.es`),
   [Bierloods22](https://bierloods22.nl/en/), [Hoptimaal](https://hoptimaal.com/en/)
 - **Czechia:** [Beershop](https://beershop.eu/) — one shop with language storefronts
   at `beershop.pl`, `beershop.cz`, `beershop.sk`, `beershop.eu`, and `beershop.de`;

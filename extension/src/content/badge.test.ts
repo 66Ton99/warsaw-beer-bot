@@ -361,4 +361,23 @@ describe('#648 renderState', () => {
       expect(animate).toHaveBeenCalledTimes(1);
     });
   });
+
+  it('renders safely without throwing when mine or global ratings are undefined or non-finite', () => {
+    const host = el();
+    expect(() => {
+      renderState(host, {
+        kind: 'found',
+        drunk: true,
+        mine: undefined as any,
+        global: undefined as any,
+        unsure: false,
+        untappdId: 6422,
+        brewery: 'Hoegaarden',
+        name: 'Blanc',
+      });
+    }).not.toThrow();
+
+    const badge = host.querySelector(`[${BADGE_MARKER}]`);
+    expect(badge).not.toBeNull();
+  });
 });

@@ -196,8 +196,9 @@ const glued = (...kids: (HTMLElement | SVGElement)[]): HTMLElement => {
 };
 
 // Показуємо крапку (4.1), промовляємо кому (4,1) — так її читає українська озвучка.
-const shown = (v: number): string => v.toFixed(1);
-const spoken = (v: number): string => v.toFixed(1).replace('.', ',');
+const shown = (v: number): string => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(1) : '');
+const spoken = (v: number): string =>
+  typeof v === 'number' && Number.isFinite(v) ? v.toFixed(1).replace('.', ',') : '';
 
 const FAILURE_LABEL: Record<FailureReason, string> = {
   blocked: 'Не вдалося перевірити: Untappd не відповів',
@@ -209,21 +210,21 @@ const FAILURE_LABEL: Record<FailureReason, string> = {
 function foundLabel(s: Extract<CardState, { kind: 'found' }>): string {
   const head = s.unsure ? 'Непевний збіг. ' : '';
   if (s.drunk) {
-    if (s.mine !== null) return `${head}Ти це пив. Твоя оцінка ${spoken(s.mine)}`;
+    if (s.mine != null) return `${head}Ти це пив. Твоя оцінка ${spoken(s.mine)}`;
     // «Оцінки не ставив» можна стверджувати лише там, де сервер справді дивився: при
     // непевному збігу `match-list.ts` не віддає особистої оцінки взагалі (user_rating
     // тільки для exact), тож відсутність числа не доводить, що людина не оцінювала.
     if (s.unsure) {
-      return s.global !== null
+      return s.global != null
         ? `${head}Схоже, ти це пив. Глобальна оцінка ${spoken(s.global)}`
         : `${head}Схоже, ти це пив. Оцінок на Untappd поки замало`;
     }
-    if (s.global !== null) {
+    if (s.global != null) {
       return `${head}Ти це пив, але оцінки не ставив. Глобальна оцінка ${spoken(s.global)}`;
     }
     return `${head}Ти це пив. Ані твоєї, ані глобальної оцінки нема`;
   }
-  return s.global !== null
+  return s.global != null
     ? `${head}Ти це не пив. Глобальна оцінка ${spoken(s.global)}`
     : `${head}Ти це не пив. Оцінок на Untappd поки замало`;
 }
@@ -316,14 +317,14 @@ export function renderState(host: HTMLElement, state: CardState): void {
       if (state.drunk) {
         parts.push(icon('check', COLOUR_DRUNK));
         if (unsure) parts.push(questionMark());
-        if (state.mine !== null) parts.push(numberSpan(shown(state.mine)));
-        else if (state.global !== null) {
+        if (state.mine != null && Number.isFinite(state.mine)) parts.push(numberSpan(shown(state.mine)));
+        else if (state.global != null && Number.isFinite(state.global)) {
           parts.push(glued(icon('star', COLOUR_RATING), numberSpan(shown(state.global))));
         }
       } else {
         parts.push(icon('star', COLOUR_RATING));
         if (unsure) parts.push(questionMark());
-        if (state.global !== null) parts.push(numberSpan(shown(state.global)));
+        if (state.global != null && Number.isFinite(state.global)) parts.push(numberSpan(shown(state.global)));
       }
       label = foundLabel(state);
       break;

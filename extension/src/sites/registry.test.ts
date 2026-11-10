@@ -11,8 +11,11 @@ import { piwnemosty } from './piwnemosty';
 import { funkyshop } from './funkyshop';
 
 describe('pickAdapter', () => {
-  it('selects beerrepublic for beerrepublic.eu', () => {
+  it('selects beerrepublic for beerrepublic.eu and beerrepublic.es', () => {
     expect(pickAdapter(new URL('https://beerrepublic.eu/collections/all'))).toBe(beerrepublic);
+    expect(pickAdapter(new URL('https://www.beerrepublic.eu/collections/all'))).toBe(beerrepublic);
+    expect(pickAdapter(new URL('https://beerrepublic.es/collections/all'))).toBe(beerrepublic);
+    expect(pickAdapter(new URL('https://www.beerrepublic.es/collections/all'))).toBe(beerrepublic);
   });
 
   it('selects onemorebeer for onemorebeer.pl', () => {

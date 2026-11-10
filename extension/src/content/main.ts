@@ -223,7 +223,8 @@ if (adapter && !adapter.isNonBeerPage?.(pageUrl)) {
   // Popup → "Refresh this page": drop the visible cards' cache entries and re-run
   // the overlay so badges reflect fresh server state without waiting out the TTL.
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if ((message as { type?: unknown }).type !== 'refresh-page') return undefined;
+    const msgType = (message as { type?: unknown }).type;
+    if (msgType !== 'refresh-page' && msgType !== 'refresh') return undefined;
     void (async () => {
       try {
         const keys = await refreshCards(document, adapter);

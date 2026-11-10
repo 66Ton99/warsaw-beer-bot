@@ -28,6 +28,10 @@ describe('manifest (both variants)', () => {
 
   it('injects the content script on supported shop pages', () => {
     const [cs] = dev.content_scripts;
+    expect(cs.matches).toContain('https://beerrepublic.eu/*');
+    expect(cs.matches).toContain('https://*.beerrepublic.eu/*');
+    expect(cs.matches).toContain('https://beerrepublic.es/*');
+    expect(cs.matches).toContain('https://*.beerrepublic.es/*');
     expect(cs.matches).toContain('https://beerfreak.org/*');
     expect(cs.matches).toContain('https://*.beerfreak.org/*');
     expect(cs.matches).toContain('https://funkyshop.pl/*');
