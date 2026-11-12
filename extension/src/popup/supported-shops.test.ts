@@ -45,7 +45,7 @@ describe('supportedShopGroups', () => {
 });
 
 describe('renderSupportedShops', () => {
-  it('renders country headings and opens the selected shop from its link', () => {
+  it('renders country headings, prevents default navigation, and opens the selected shop from its link', () => {
     const container = document.createElement('div');
     const open = vi.fn();
 
@@ -62,9 +62,75 @@ describe('renderSupportedShops', () => {
     const flasker = Array.from(container.querySelectorAll<HTMLAnchorElement>('.shop-link'))
       .find((link) => link.textContent?.includes('Flasker'))!;
 
-    flasker.click();
+    expect(flasker.getAttribute('aria-label')).toBe('Open Flasker in a new tab');
+    const event = new MouseEvent('click', { cancelable: true });
+    flasker.dispatchEvent(event);
 
+    expect(event.defaultPrevented).toBe(true);
+    expect(open).toHaveBeenCalledTimes(1);
     expect(open).toHaveBeenCalledWith('https://flasker.com.ua/');
+  });
+
+  it('uses openShopTab by default when open argument is omitted', () => {
+    const create = vi.fn(async () => ({} as chrome.tabs.Tab));
+    vi.stubGlobal('chrome', { tabs: { create } });
+    try {
+      const container = document.createElement('div');
+      renderSupportedShops(container, ['en-GB']);
+      const link = container.querySelector<HTMLAnchorElement>('.shop-link')!;
+
+      const event = new MouseEvent('click', { cancelable: true });
+      link.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(create).toHaveBeenCalledWith({ active: true, url: link.href });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('does not prevent default or call custom opener on Ctrl/Cmd/Shift clicks, but intercepts Alt+click', () => {
+    const container = document.createElement('div');
+    const open = vi.fn();
+    renderSupportedShops(container, ['en-GB'], open);
+    const link = container.querySelector<HTMLAnchorElement>('.shop-link')!;
+
+    for (const modifier of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) {
+      const event = new MouseEvent('click', { ...modifier, cancelable: true });
+      link.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(open).not.toHaveBeenCalled();
+    }
+
+    const altEvent = new MouseEvent('click', { altKey: true, cancelable: true });
+    link.dispatchEvent(altEvent);
+    expect(altEvent.defaultPrevented).toBe(true);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(link.href);
+  });
+
+  it('falls back to window.open when tabs.create rejects through the default opener', async () => {
+    const create = vi.fn(async () => { throw new Error('tab create failed'); });
+    vi.stubGlobal('chrome', { tabs: { create } });
+    const originalOpen = window.open;
+    const windowOpen = vi.fn();
+    window.open = windowOpen;
+    try {
+      const container = document.createElement('div');
+      renderSupportedShops(container, ['en-GB']);
+      const link = container.querySelector<HTMLAnchorElement>('.shop-link')!;
+
+      link.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(windowOpen).toHaveBeenCalledTimes(1);
+      expect(windowOpen).toHaveBeenCalledWith(link.href, '_blank', 'noopener');
+    } finally {
+      window.open = originalOpen;
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -83,3 +149,4 @@ describe('openShopTab', () => {
     await expect(openShopTab('https://beerfreak.org/', { create })).rejects.toThrow('tab unavailable');
   });
 });
+

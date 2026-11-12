@@ -109,8 +109,11 @@ export function renderSupportedShops(
       link.setAttribute('aria-label', `Open ${shop.name} in a new tab`);
       link.append(document.createTextNode(shop.name), externalIcon());
       link.addEventListener('click', (event) => {
+        if (event.ctrlKey || event.metaKey || event.shiftKey) return;
         event.preventDefault();
-        void open(shop.url);
+        void Promise.resolve(open(shop.url)).catch(() => {
+          window.open(shop.url, '_blank', 'noopener');
+        });
       });
       section.append(link);
     }
@@ -129,3 +132,4 @@ interface TabCreator {
 export async function openShopTab(url: string, tabsApi: TabCreator = chrome.tabs): Promise<void> {
   await tabsApi.create({ active: true, url });
 }
+
