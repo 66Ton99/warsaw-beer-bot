@@ -23,6 +23,11 @@
   `## [x.y.z] - DATE` (see docs/extension-release.md).
 -->
 
+## [0.22.1] - 2026-11-10
+
+- Added support for Bubbles Beers (https://bubblesbeers.com): Warsaw Beer Overlay now badges craft beers, Untappd check-in history, and community ratings across catalog and collection pages on bubblesbeers.com.
+- Full card attribute parsing for bubblesbeers.com: Automatic extraction of brewery and beer name from title patterns (`Brewery – Name – Style`), style recognition, and filtering of non-beer merchandise, tasting gift packs, and artisan sodas.
+
 ## [0.22.0] - 2026-11-08
 
 - Without a Telegram token you can now tap “Sync my check-ins”: your check-ins are kept only in this browser, and shop pages show ✅ for beers you've had and your rating. Clear them any time on the options page.

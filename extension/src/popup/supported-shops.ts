@@ -4,7 +4,7 @@ export interface SupportedShop {
   url: string;
 }
 
-type ShopCountry = 'Ukraine' | 'Poland' | 'The Netherlands' | 'Czechia';
+type ShopCountry = 'Ukraine' | 'Poland' | 'The Netherlands' | 'Czechia' | 'Spain';
 
 export interface SupportedShopGroup {
   country: ShopCountry;
@@ -29,7 +29,7 @@ interface ShopDefinition {
   url: string | ({ en: string } & Partial<Record<Exclude<SupportedLanguage, 'en'>, string>>);
 }
 
-const COUNTRY_ORDER: ShopCountry[] = ['Ukraine', 'Poland', 'The Netherlands', 'Czechia'];
+const COUNTRY_ORDER: ShopCountry[] = ['Ukraine', 'Poland', 'The Netherlands', 'Czechia', 'Spain'];
 
 const SHOPS: ShopDefinition[] = [
   { id: 'beerrepublic', name: 'Beer Republic', country: 'The Netherlands', url: 'https://beerrepublic.eu/' },
@@ -47,6 +47,7 @@ const SHOPS: ShopDefinition[] = [
     country: 'Czechia',
     url: { pl: 'https://beershop.pl/', en: 'https://beershop.eu/' },
   },
+  { id: 'bubblesbeers', name: 'Bubbles Beers', country: 'Spain', url: 'https://bubblesbeers.com/shop/' },
 ];
 
 function preferredSupportedLanguage(languages: readonly string[]): SupportedLanguage {

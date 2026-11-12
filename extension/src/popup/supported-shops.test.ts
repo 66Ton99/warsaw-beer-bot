@@ -22,6 +22,7 @@ describe('supportedShopGroups', () => {
       ['Poland', ['OneMoreBeer', 'Piwne Mosty', 'Funkyshop']],
       ['The Netherlands', ['Beer Republic', 'Bierloods22', 'Hoptimaal']],
       ['Czechia', ['Beershop']],
+      ['Spain', ['Bubbles Beers']],
     ]);
     expect(groups.flatMap(({ shops }) => shops.map(({ id }) => id)).sort())
       .toEqual(ADAPTERS.map(({ id }) => id).sort());
@@ -56,9 +57,10 @@ describe('renderSupportedShops', () => {
       'Poland',
       'The Netherlands',
       'Czechia',
+      'Spain',
     ]);
-    expect(container.querySelectorAll<HTMLAnchorElement>('.shop-link')).toHaveLength(10);
-    expect(count).toBe(10);
+    expect(container.querySelectorAll<HTMLAnchorElement>('.shop-link')).toHaveLength(11);
+    expect(count).toBe(11);
     const flasker = Array.from(container.querySelectorAll<HTMLAnchorElement>('.shop-link'))
       .find((link) => link.textContent?.includes('Flasker'))!;
 
