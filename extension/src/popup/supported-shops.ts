@@ -86,7 +86,7 @@ function externalIcon(): SVGSVGElement {
 export function renderSupportedShops(
   container: HTMLElement,
   languages: readonly string[],
-  open: ShopOpener = openShopWindow,
+  open: ShopOpener = openShopTab,
 ): number {
   container.replaceChildren();
   let count = 0;
@@ -106,11 +106,14 @@ export function renderSupportedShops(
       link.href = shop.url;
       link.target = '_blank';
       link.rel = 'noopener';
-      link.setAttribute('aria-label', `Open ${shop.name} in a new window`);
+      link.setAttribute('aria-label', `Open ${shop.name} in a new tab`);
       link.append(document.createTextNode(shop.name), externalIcon());
       link.addEventListener('click', (event) => {
+        if (event.ctrlKey || event.metaKey || event.shiftKey) return;
         event.preventDefault();
-        void open(shop.url);
+        void Promise.resolve(open(shop.url)).catch(() => {
+          window.open(shop.url, '_blank', 'noopener');
+        });
       });
       section.append(link);
     }
@@ -120,22 +123,14 @@ export function renderSupportedShops(
   return count;
 }
 
-interface WindowCreator {
-  create(createData: chrome.windows.CreateData): Promise<chrome.windows.Window | undefined>;
-}
-
 interface TabCreator {
   create(createProperties: chrome.tabs.CreateProperties): Promise<chrome.tabs.Tab>;
 }
 
-export async function openShopWindow(
+export async function openShopTab(
   url: string,
-  windowsApi: WindowCreator = chrome.windows,
-  tabsApi?: TabCreator,
+  tabsApi: TabCreator = chrome.tabs,
 ): Promise<void> {
-  try {
-    await windowsApi.create({ focused: true, url });
-  } catch {
-    await (tabsApi ?? chrome.tabs).create({ active: true, url });
-  }
+  await tabsApi.create({ active: true, url });
 }
+

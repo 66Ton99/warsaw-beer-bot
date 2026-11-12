@@ -25,6 +25,8 @@
 
 ## [Unreleased]
 
+- Selecting a shop from “Supported shops” in the popup now opens it in a new browser tab instead of a separate window.
+
 - Fixed beers on Piwne Mosty being marked as “Not beer” (the grey ✕) when listed under the shop's temporary category, such as PINTA Barrel Brewing releases. Their ratings and check-in badges now appear normally.
 
 - When “Sync my check-ins” stopped because Untappd did not return your check-in feed, the popup said “check your connection and token”, which was not the cause. It now says that Untappd did not return the feed, or returned an unexpected page, and what to do next.
