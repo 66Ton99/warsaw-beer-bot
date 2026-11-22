@@ -61,8 +61,7 @@ function checkins(n: number): string {
 }
 
 export function recheckFeedbackText(mergedThisRun: number): string {
-  if (mergedThisRun <= 0) return 'No new check-ins.';
-  return mergedThisRun === 1 ? 'Added 1 new check-in.' : `Added ${count(mergedThisRun)} new check-ins.`;
+  return mergedThisRun <= 0 ? 'No new check-ins.' : 'Check-ins updated.';
 }
 
 /** #934 §6: one label, one bar, one action per sync state. */

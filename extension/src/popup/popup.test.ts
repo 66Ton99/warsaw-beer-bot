@@ -43,10 +43,10 @@ describe('syncPercent', () => {
 });
 
 describe('recheckFeedbackText', () => {
-  it('formats zero, singular and plural merged check-in counts', () => {
+  it('formats zero and positive merged check-in states without claiming a multi-step total', () => {
     expect(recheckFeedbackText(0)).toBe('No new check-ins.');
-    expect(recheckFeedbackText(1)).toBe('Added 1 new check-in.');
-    expect(recheckFeedbackText(1205)).toBe(`Added 1${N}205 new check-ins.`);
+    expect(recheckFeedbackText(1)).toBe('Check-ins updated.');
+    expect(recheckFeedbackText(1205)).toBe('Check-ins updated.');
   });
 });
 
@@ -502,7 +502,7 @@ describe('initPopup', () => {
 
     statusReply = { ...caughtUpReply, serverCount: 125, profileTotal: 125, mergedThisRun: 25 };
     recheckBtn.click();
-    await vi.waitFor(() => expect(document.getElementById('syncStatus')?.textContent).toBe('Added 25 new check-ins.'));
+    await vi.waitFor(() => expect(document.getElementById('syncStatus')?.textContent).toBe('Check-ins updated.'));
   });
 
   it('hides the compact recheck button while running or on a gap', async () => {

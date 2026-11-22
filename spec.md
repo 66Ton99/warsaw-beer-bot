@@ -2404,7 +2404,7 @@ submit сторінки до backend або паузу між сторінкам
   `min(100, floor(serverCount / profileTotal × 100))`, без `profileTotal` — порожня з самим
   числом. **«✓ Fully synced» — лише з `caughtUp`**: велика кнопка ховається, але поруч із міткою
   показується компактна кнопка оновлення (`#syncRecheck`), яка запускає звичайний ручний синк і
-  після завершення показує підсумок (`No new check-ins.` або `Added N new check-ins.`). При
+  після завершення показує підсумок (`No new check-ins.` або `Check-ins updated.`). При
   переході між `#syncRecheck` і великою кнопкою фокус клавіатури переноситься, щоб не губитися на
   `body`. Рівні лічильники без `caughtUp` дають 100 %,
   «Synced N of N» і **Sync again**. Червоні лише `error`, `page_rejected`, `feed_unavailable`;
