@@ -43,6 +43,7 @@ export interface SyncWidgetView {
   detail: string | null;
   /** 'clear' — #924: empty the local check-ins, then sync (another account in local mode). */
   action: { kind: 'start' | 'stop' | 'clear'; label: string } | null;
+  recheck: boolean;
   link: { text: string; href: string } | null;
   tone: 'neutral' | 'error';
 }
@@ -65,7 +66,7 @@ export function syncWidgetView(s: SyncStatusView, now: Date): SyncWidgetView {
   const bar = p ?? 'unknown';
   const ofTotal = s.profileTotal !== null ? `${count(s.serverCount)} of ${count(s.profileTotal)}` : count(s.serverCount);
   const view = (label: string, rest: Partial<SyncWidgetView> = {}): SyncWidgetView =>
-    ({ label, bar: null, detail: null, action: null, link: null, tone: 'neutral', ...rest });
+    ({ label, bar: null, detail: null, action: null, recheck: false, link: null, tone: 'neutral', ...rest });
   const start = (label: string) => ({ kind: 'start' as const, label });
   const untappd = { text: 'Open untappd.com', href: UNTAPPD_HOME };
 
@@ -80,7 +81,7 @@ export function syncWidgetView(s: SyncStatusView, now: Date): SyncWidgetView {
     // A record without an intent that says `capped`: a silent check spent on a hole, or an older version's.
     case 'capped':
       return s.outcome === 'done' && s.caughtUp
-        ? view('✓ Fully synced', { bar: 100, detail: checkins(s.serverCount) })
+        ? view('✓ Fully synced', { bar: 100, detail: checkins(s.serverCount), recheck: true })
         : view(`Synced ${ofTotal}`, { bar, action: start('Sync again') });
     case 'gap':
       return view(s.gapMissing !== null ? `${s.gapMissing === 1 ? '1 new check-in' : `${count(s.gapMissing)} new check-ins`}` : 'New check-ins',
@@ -142,6 +143,7 @@ interface SyncWidgetNodes {
   link: HTMLAnchorElement;
   button: HTMLButtonElement;
   buttonLabel: HTMLElement | null;
+  recheckButton?: HTMLButtonElement | null;
 }
 
 /** The only code that writes a SyncWidgetView into the DOM. */
@@ -163,6 +165,10 @@ export function renderSyncWidget(n: SyncWidgetNodes, v: SyncWidgetView): void {
   n.button.hidden = v.action === null;
   n.button.disabled = false;
   if (n.buttonLabel && v.action) n.buttonLabel.textContent = v.action.label;
+  if (n.recheckButton) {
+    n.recheckButton.hidden = !v.recheck;
+    n.recheckButton.disabled = false;
+  }
 }
 
 type SendSyncStart = (callback: () => void) => void;
@@ -303,10 +309,11 @@ async function initPopup(): Promise<void> {
   if (clearStatus) wireClearButton(clearBtn, clearStatus, { count: countAll, clear: clearAll });
 
   const widget = el<HTMLElement>('syncWidget');
+  const recheckBtn = el<HTMLButtonElement>('syncRecheck');
   const widgetNodes = syncBtn && widget ? {
     label: el<HTMLElement>('syncLabel'), bar: el<HTMLElement>('syncBar'), fill: el<HTMLElement>('syncBarFill'),
     detail: el<HTMLElement>('syncDetail'), link: el<HTMLAnchorElement>('syncLink'), button: syncBtn,
-    buttonLabel: syncBtn.querySelector<HTMLElement>('span'),
+    buttonLabel: syncBtn.querySelector<HTMLElement>('span'), recheckButton: recheckBtn,
   } : null;
   // #924: both modes sync — to the server with a Telegram token, into this browser without one.
   const mode = syncMode(settings);
@@ -334,15 +341,12 @@ async function initPopup(): Promise<void> {
         if (s.running) setTimeout(poll, 1500);
       });
     };
-    syncBtn.addEventListener('click', async () => {
-      if (latestView?.action?.kind === 'stop') {
-        syncBtn.disabled = true;
-        syncStatus.textContent = 'Stopping…';
-        chrome.runtime.sendMessage({ type: 'checkin-sync:stop' }, () => { void chrome.runtime.lastError; });
-        return;
-      }
-      const clearFirst = latestView?.action?.kind === 'clear';
-      syncBtn.disabled = true;
+    const setSyncButtonsDisabled = (disabled: boolean) => {
+      syncBtn.disabled = disabled;
+      if (recheckBtn) recheckBtn.disabled = disabled;
+    };
+    const triggerSync = async (clearFirst: boolean) => {
+      setSyncButtonsDisabled(true);
       syncStatus.textContent = clearFirst ? 'Clearing…' : 'Starting…';
       // Fetching the user's feed needs the untappd.com host permission (optional,
       // shared with enrichment). Request it in this user-gesture context so a user
@@ -356,7 +360,7 @@ async function initPopup(): Promise<void> {
       if (!granted) {
         chrome.runtime.sendMessage({ type: 'checkin-sync:not-starting' }, () => { void chrome.runtime.lastError; });
         syncStatus.textContent = 'Allow access to untappd.com to sync your check-ins.';
-        syncBtn.disabled = false;
+        setSyncButtonsDisabled(false);
         return;
       }
       // After the permission request: the gesture is spent on it, and confirm() needs none.
@@ -369,7 +373,7 @@ async function initPopup(): Promise<void> {
         });
         if (!cleared) {
           syncStatus.textContent = 'Could not clear the check-ins stored in this browser.';
-          syncBtn.disabled = false;
+          setSyncButtonsDisabled(false);
           return;
         }
       }
@@ -381,6 +385,18 @@ async function initPopup(): Promise<void> {
         });
       }, 1500);
       poll();
+    };
+    syncBtn.addEventListener('click', () => {
+      if (latestView?.action?.kind === 'stop') {
+        setSyncButtonsDisabled(true);
+        syncStatus.textContent = 'Stopping…';
+        chrome.runtime.sendMessage({ type: 'checkin-sync:stop' }, () => { void chrome.runtime.lastError; });
+        return;
+      }
+      void triggerSync(latestView?.action?.kind === 'clear');
+    });
+    recheckBtn?.addEventListener('click', () => {
+      void triggerSync(false);
     });
     poll(); // reflect an in-progress run when the popup (re)opens
   }

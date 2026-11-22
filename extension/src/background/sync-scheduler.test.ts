@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { CheckinSyncPageResult } from '../api/types';
 import type { SyncOutcome } from './handle-checkin-sync';
 import {
-  CHECKS_KEY, INTENT_KEY, PAUSE_KEY, SILENT_BUDGET, WATCHDOG_ALARM,
+  CHECKS_KEY, INTENT_KEY, LAST_CHECK_KEY, PAUSE_KEY, SILENT_BUDGET, WATCHDOG_ALARM,
   createSyncScheduler, localDate, nextLocalMidnight, pagesNeeded,
   type SchedulerDeps, type SchedulerReport, type StepRequest, type SyncIntent,
 } from './sync-scheduler';
@@ -487,5 +487,86 @@ describe('resume', () => {
     const t = setup({ hasUntappdPermission: async () => false }, memoryStore({ [INTENT_KEY]: intent }));
     await t.scheduler.resume();
     expect(t.reports.map((r) => r.outcome.status)).toEqual(['error']);
+  });
+});
+
+describe('checkIfStale and LAST_CHECK_KEY', () => {
+  it('check() and startManual() record LAST_CHECK_KEY', async () => {
+    const t = setup();
+    t.setNow(new Date('2026-11-22T10:00:00.000Z'));
+    expect(await t.scheduler.check()).toBe('started');
+    await t.scheduler.idle();
+    expect(t.store.data.get(LAST_CHECK_KEY)).toBe('2026-11-22T10:00:00.000Z');
+
+    t.setNow(new Date('2026-11-22T10:30:00.000Z'));
+    await t.scheduler.startManual();
+    await t.scheduler.idle();
+    expect(t.store.data.get(LAST_CHECK_KEY)).toBe('2026-11-22T10:30:00.000Z');
+  });
+
+  it('returns fresh without running or spending daily quota when elapsed < minAgeMs', async () => {
+    const runStep = vi.fn(async () => outcome('done'));
+    const t = setup({ runStep }, memoryStore({
+      [LAST_CHECK_KEY]: '2026-11-22T10:00:00.000Z',
+      [CHECKS_KEY]: { date: '2026-11-22', count: 1 },
+    }));
+    t.setNow(new Date('2026-11-22T10:59:59.000Z'));
+    expect(await t.scheduler.checkIfStale(60 * 60_000)).toBe('fresh');
+    expect(runStep).toHaveBeenCalledTimes(0);
+    expect(t.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: 1 });
+  });
+
+  it('starts check() at exact minAgeMs boundary, when LAST_CHECK_KEY is absent, and when clock moves backwards', async () => {
+    const runStep = vi.fn(async () => outcome('done'));
+    const t1 = setup({ runStep }, memoryStore({ [LAST_CHECK_KEY]: '2026-11-22T10:00:00.000Z' }));
+    t1.setNow(new Date('2026-11-22T11:00:00.000Z'));
+    expect(await t1.scheduler.checkIfStale(60 * 60_000)).toBe('started');
+    await t1.scheduler.idle();
+    expect(runStep).toHaveBeenCalledTimes(1);
+
+    const runStep2 = vi.fn(async () => outcome('done'));
+    const t2 = setup({ runStep: runStep2 });
+    t2.setNow(new Date('2026-11-22T11:00:00.000Z'));
+    expect(await t2.scheduler.checkIfStale(60 * 60_000)).toBe('started');
+    await t2.scheduler.idle();
+    expect(runStep2).toHaveBeenCalledTimes(1);
+
+    const runStep3 = vi.fn(async () => outcome('done'));
+    const t3 = setup({ runStep: runStep3 }, memoryStore({ [LAST_CHECK_KEY]: '2026-11-22T12:00:00.000Z' }));
+    t3.setNow(new Date('2026-11-22T11:00:00.000Z'));
+    expect(await t3.scheduler.checkIfStale(60 * 60_000)).toBe('started');
+    await t3.scheduler.idle();
+    expect(runStep3).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not write LAST_CHECK_KEY or CHECKS_KEY when mayCheckQuietly or permission is false', async () => {
+    const runStep = vi.fn(async () => outcome('done'));
+    const t1 = setup({ runStep, mayCheckQuietly: async () => false });
+    expect(await t1.scheduler.checkIfStale(60 * 60_000)).toBe('never_synced');
+    expect(t1.store.data.has(LAST_CHECK_KEY)).toBe(false);
+    expect(t1.store.data.has(CHECKS_KEY)).toBe(false);
+    expect(runStep).toHaveBeenCalledTimes(0);
+
+    const t2 = setup({ runStep, hasUntappdPermission: async () => false });
+    expect(await t2.scheduler.checkIfStale(60 * 60_000)).toBe('no_permission');
+    expect(t2.store.data.has(LAST_CHECK_KEY)).toBe(false);
+    expect(t2.store.data.has(CHECKS_KEY)).toBe(false);
+    expect(runStep).toHaveBeenCalledTimes(0);
+  });
+
+  it('serializes concurrent check() calls so only one daily slot is spent', async () => {
+    let releasePerm!: (v: boolean) => void;
+    const t = setup({
+      hasUntappdPermission: () => new Promise<boolean>((resolve) => { releasePerm = resolve; }),
+      runStep: async () => outcome('done'),
+    });
+    t.setNow(new Date(2026, 10, 22, 12, 0, 0));
+    const first = t.scheduler.check();
+    const second = t.scheduler.check();
+    releasePerm(true);
+    expect(await first).toBe('started');
+    expect(await second).toBe('running');
+    await t.scheduler.idle();
+    expect(t.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: 1 });
   });
 });

@@ -11,7 +11,7 @@ import {
   restoreSyncBadge, AWAITING_PERMISSION_KEY, handleAwaitingPermission, handleNotStarting, handleUntappdPermissionAdded,
 } from './index';
 import { setSettings } from '../shared/config';
-import { CHECK_ALARM, INTENT_KEY, WATCHDOG_ALARM } from './sync-scheduler';
+import { ACTIVITY_CHECK_COOLDOWN_MS, CHECK_ALARM, INTENT_KEY, LAST_CHECK_KEY, WATCHDOG_ALARM } from './sync-scheduler';
 import { getCached } from '../cache/store';
 import type { MatchResult } from '../api/types';
 import * as client from '../api/client';
@@ -763,6 +763,12 @@ test('restoring identical credentials reuses only the unchanged account, while b
 // #934: the scheduler's wiring in the worker. The listeners are the ones index.ts registered at import.
 const onAlarm = vi.mocked(chrome.alarms.onAlarm.addListener).mock.calls[0][0] as (a: { name: string }) => void;
 const onStartup = vi.mocked(chrome.runtime.onStartup.addListener).mock.calls[0][0] as () => void;
+const onInstalled = vi.mocked(chrome.runtime.onInstalled.addListener).mock.calls[0][0] as () => void;
+const onMessage = vi.mocked(chrome.runtime.onMessage.addListener).mock.calls[0][0] as (
+  message: unknown,
+  sender: chrome.runtime.MessageSender,
+  sendResponse: (response?: unknown) => void,
+) => boolean | undefined;
 // The promise forms index.ts uses; @types/chrome types the callback overloads first.
 const permissionsContains = chrome.permissions.contains as unknown as Mock<() => Promise<boolean>>;
 const alarmsGet = chrome.alarms.get as unknown as Mock<() => Promise<chrome.alarms.Alarm | undefined>>;
@@ -906,6 +912,62 @@ describe('#934 scheduler wiring', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(fetchMock).toHaveBeenCalledTimes(0);
     expect(localStore.has(INTENT_KEY)).toBe(false);
+  });
+
+  it('onInstalled ensures the 6-hourly alarm and checks only when LAST_CHECK_KEY is absent or stale', async () => {
+    permissionsContains.mockResolvedValue(true);
+    vi.mocked(chrome.alarms.create).mockClear();
+    alarmsGet.mockResolvedValueOnce(undefined);
+    const fetchMock = vi.fn(async () => new Response(FEED, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(client, 'postCheckinSyncPage').mockResolvedValue({
+      merged: 0, alreadyKnown: 25, pageSize: 25, nextMaxId: null, nextCursor: null, profileTotal: 100, serverCount: 100, complete: true,
+    });
+
+    onInstalled();
+    await vi.waitFor(() => expect(chrome.alarms.create).toHaveBeenCalledWith(CHECK_ALARM, { periodInMinutes: 360 }));
+    await vi.waitFor(() => expect(localStore.get('checkinSync')).toMatchObject({ running: false, outcome: 'done' }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock.mockClear();
+    alarmsGet.mockResolvedValueOnce({ name: CHECK_ALARM, scheduledTime: 0, periodInMinutes: 360, persistAcrossSessions: true });
+    onInstalled();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  it('shop activity (match and cache:get-many) triggers a silent check after cooldown and skips within cooldown', async () => {
+    permissionsContains.mockResolvedValue(true);
+    const fetchMock = vi.fn(async () => new Response(FEED, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(client, 'postMatch').mockResolvedValue([]);
+    vi.spyOn(client, 'postCheckinSyncPage').mockResolvedValue({
+      merged: 0, alreadyKnown: 25, pageSize: 25, nextMaxId: null, nextCursor: null, profileTotal: 100, serverCount: 100, complete: true,
+    });
+
+    localStore.set(LAST_CHECK_KEY, new Date(Date.now() - ACTIVITY_CHECK_COOLDOWN_MS - 1000).toISOString());
+    const matchReply = new Promise((resolve) => {
+      onMessage({ type: 'match', cards: [] }, { tab: { url: 'https://beerfreak.org/' } as chrome.tabs.Tab }, resolve);
+    });
+    await matchReply;
+    await vi.waitFor(() => expect(localStore.get('checkinSync')).toMatchObject({ running: false, outcome: 'done' }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock.mockClear();
+    const cacheReply = new Promise((resolve) => {
+      onMessage({ type: 'cache:get-many', keys: [] }, {}, resolve);
+    });
+    await cacheReply;
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+
+    localStore.set(LAST_CHECK_KEY, new Date(Date.now() - ACTIVITY_CHECK_COOLDOWN_MS - 1000).toISOString());
+    const staleCacheReply = new Promise((resolve) => {
+      onMessage({ type: 'cache:get-many', keys: [] }, {}, resolve);
+    });
+    await staleCacheReply;
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(localStore.has(INTENT_KEY)).toBe(false));
   });
 });
 

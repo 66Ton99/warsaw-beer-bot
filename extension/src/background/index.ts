@@ -5,7 +5,7 @@ import { ensureInstall, extensionVersion, forgetInstallToken } from './install';
 import { FeedVerdict, feedFailure, runCheckinSync, type SyncOutcome, type SyncProgress } from './handle-checkin-sync';
 import { isBlockPage } from '../../../src/shared/untappd/block';
 import {
-  CHECK_ALARM, CHECK_PERIOD_MINUTES, INTENT_KEY, WATCHDOG_ALARM, createSyncScheduler,
+  ACTIVITY_CHECK_COOLDOWN_MS, CHECK_ALARM, CHECK_PERIOD_MINUTES, INTENT_KEY, WATCHDOG_ALARM, createSyncScheduler,
   type SchedulerReport, type StepRequest,
 } from './sync-scheduler';
 import { sessionUsername } from '../../../src/shared/untappd/session-user';
@@ -795,10 +795,14 @@ async function ensureCheckAlarm(): Promise<void> {
   if (!(await chrome.alarms.get(CHECK_ALARM))) await chrome.alarms.create(CHECK_ALARM, { periodInMinutes: CHECK_PERIOD_MINUTES });
 }
 
-chrome.runtime.onInstalled.addListener(() => { void ensureInstall(); void ensureCheckAlarm(); });
+chrome.runtime.onInstalled.addListener(() => {
+  void ensureInstall();
+  void ensureCheckAlarm().catch(() => undefined);
+  void syncScheduler.checkIfStale();
+});
 chrome.runtime.onStartup.addListener(() => {
   void ensureInstall();
-  void ensureCheckAlarm();
+  void ensureCheckAlarm().catch(() => undefined);
   void syncScheduler.check();
 });
 chrome.permissions.onAdded.addListener((p) => { void handleUntappdPermissionAdded(p.origins); });
@@ -806,6 +810,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === WATCHDOG_ALARM) void syncScheduler.resume();
   if (alarm.name === CHECK_ALARM) void syncScheduler.check();
 });
+// Chrome does not promise alarms survive every restart/update: restore the 6-hourly check alarm on worker start.
+void ensureCheckAlarm().catch(() => undefined);
 // Every worker start: an intent a dead worker left behind continues from the first page.
 void syncScheduler.resume();
 // Chrome keeps no badge text across browser starts: the stored status brings it back.
@@ -814,11 +820,19 @@ void restoreSyncBadge();
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   void ensureInstall();
   const t = (message as { type?: unknown }).type;
-  if (t === 'match') { handleMatch(message as MatchMessage, shopOf(sender.tab?.url)).then(sendResponse); return true; }
+  if (t === 'match') {
+    void syncScheduler.checkIfStale(ACTIVITY_CHECK_COOLDOWN_MS);
+    handleMatch(message as MatchMessage, shopOf(sender.tab?.url)).then(sendResponse);
+    return true;
+  }
   if (t === 'enrich:fetch') { handleEnrichFetch(message as EnrichFetchMessage).then(sendResponse); return true; }
   if (t === 'enrich:candidates') { handleEnrichCandidates(message as EnrichCandidatesMessage).then(sendResponse); return true; }
   if (t === 'enrich:result') { handleEnrichResult(message as EnrichResultMessage).then(sendResponse); return true; }
-  if (t === 'cache:get-many') { handleCacheGetMany(message.keys).then(results => sendResponse({ results })); return true; }
+  if (t === 'cache:get-many') {
+    void syncScheduler.checkIfStale(ACTIVITY_CHECK_COOLDOWN_MS);
+    handleCacheGetMany(message.keys).then(results => sendResponse({ results }));
+    return true;
+  }
   if (t === 'cache:set') { handleCacheSet(message.key, message.result).then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false })); return true; }
   if (t === 'cache:set-many') { handleCacheSetMany(message.entries).then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false })); return true; }
   if (t === 'cache:clear-keys') { handleCacheClearKeys(message.keys).then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false })); return true; }

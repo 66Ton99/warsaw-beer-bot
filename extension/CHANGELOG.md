@@ -27,6 +27,7 @@
 
 - On winetime and flasker, and for Ukrainian beers on Extra Magazin, a beer with a Cyrillic name could show another beer's rating, typically another beer from the same brewery seen earlier that day. Each beer now keeps its own badge.
 - Added Extra Magazin (`extramagazin.es`) support across its Spanish, Ukrainian, Polish, Catalan, Russian, and Romanian pages, including its beer, cider, and kvass sections, while skipping the supermarket's food, soft-drink, wine, and spirits sections.
+- Added a small refresh button next to “✓ Fully synced” in the popup so you can check for new check-ins on demand, and automatic check-in updates now also run when you open a supported shop (at most once an hour, within the daily limit) instead of waiting only for a browser restart or the 6-hour timer.
 - Choosing a shop in the popup's “Supported shops” list now opens it in a new tab. Before, every shop opened in its own browser window, and after a few picks you had a pile of windows to close.
 - Ctrl-click (Cmd-click on a Mac) on a shop in the “Supported shops” list now opens it in a background tab, as with any link; Shift-click opens it in a new window. Before, every click opened the shop in a new tab and switched you to it.
 

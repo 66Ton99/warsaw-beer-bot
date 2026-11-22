@@ -300,8 +300,8 @@ housekeeping one at the bottom:
   "Without Telegram"). Under the button sit a label, a bar and a detail line: while a sync
   is running they show `Syncing… 42 %` and `5 210 of 12 407`, and the button
   becomes **Stop** — that means "working", not "broken". Once your whole
-  history is in, the label says **"✓ Fully synced"** and the button hides: new
-  check-ins keep arriving on their own. If a sync stops, the label says why and
+  history is in, the label says **"✓ Fully synced"** and the large button hides: new
+  check-ins keep arriving on their own, and a small refresh button next to the label lets you check for new ones immediately. If a sync stops, the label says why and
   the button offers what to do (**Sync**, **Retry**, **Try now**). Only two
   messages about Untappd and `Sync failed` are red: `Untappd did not return
   your feed` — open untappd.com and check you are signed in to the account
@@ -375,8 +375,8 @@ Supporter.
   **"✓ Fully synced"** appears only once the bot has confirmed your history is
   complete with no holes — even at 100 % on the bar you may see **"Synced
   12 407 of 12 407"** with **Sync again** if a hole remains inside the history.
-- **New check-ins arrive on their own:** when the browser starts and every 6
-  hours after that, the extension quietly checks your feed (at most 10
+- **New check-ins arrive on their own:** when the browser starts, every 6
+  hours, and when you open a supported shop (if at least an hour has passed since the last check), the extension quietly checks your feed (at most 10
   requests at a time and 4 times a day) and tops up new check-ins, so ✅
   appears on a shop page without pressing Sync — the next time you open or
   reload that page. The quiet check only runs once access to untappd.com has

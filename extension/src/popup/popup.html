@@ -29,7 +29,23 @@
         <span>Sync my check-ins</span>
       </button>
       <div id="syncWidget" class="sync-widget" hidden>
-        <p id="syncLabel" class="sync-label"></p>
+        <div class="sync-head">
+          <p id="syncLabel" class="sync-label"></p>
+          <button
+            id="syncRecheck"
+            class="sync-recheck"
+            type="button"
+            aria-label="Check for new check-ins"
+            title="Check for new check-ins"
+            hidden
+          >
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+        </div>
         <div id="syncBar" class="sync-bar" role="progressbar" aria-label="Check-in history synced" aria-valuemin="0" aria-valuemax="100" hidden>
           <div id="syncBarFill" class="sync-bar-fill"></div>
         </div>
