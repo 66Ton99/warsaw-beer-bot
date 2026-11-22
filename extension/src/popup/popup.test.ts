@@ -505,6 +505,35 @@ describe('initPopup', () => {
     await vi.waitFor(() => expect(document.getElementById('syncStatus')?.textContent).toBe('Check-ins updated.'));
   });
 
+  it('shows Check-ins updated. even when a multi-step recheck finishes with mergedThisRun 0 on the final step, and keeps focus across click', async () => {
+    const caughtUpReply = { type: 'checkin-sync:status:ok', running: false, serverCount: 100, profileTotal: 100, mergedThisRun: 0,
+      outcome: 'done', complete: true, caughtUp: true, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' };
+    await bootPopup('tok', caughtUpReply);
+    expect(document.getElementById('syncStatus')?.textContent).toBe('');
+
+    const chromeStub = globalThis.chrome as unknown as { runtime: Record<string, unknown> };
+    const queue: object[] = [
+      { ...caughtUpReply, running: true, mergedThisRun: 25 },
+      { ...caughtUpReply, running: false, serverCount: 125, profileTotal: 125, mergedThisRun: 0 },
+    ];
+    chromeStub.runtime.sendMessage = vi.fn((m: { type?: string }, callback?: (r?: object) => void) => {
+      if (m.type === 'checkin-sync:status') {
+        callback?.(queue.shift() ?? caughtUpReply);
+      } else {
+        callback?.({ type: 'checkin-sync:started', alreadyRunning: false });
+      }
+    });
+
+    const recheckBtn = document.getElementById('syncRecheck') as HTMLButtonElement;
+    const syncBtn = document.getElementById('syncCheckins') as HTMLButtonElement;
+    recheckBtn.focus();
+    recheckBtn.click();
+    await vi.waitFor(() => expect(syncBtn.hidden).toBe(false));
+    expect(document.activeElement).toBe(syncBtn);
+    await vi.waitFor(() => expect(document.getElementById('syncStatus')?.textContent).toBe('Check-ins updated.'), { timeout: 3000 });
+    expect(document.activeElement).toBe(recheckBtn);
+  });
+
   it('hides the compact recheck button while running or on a gap', async () => {
     await bootPopup('tok', { type: 'checkin-sync:status:ok', running: true, serverCount: 50, profileTotal: 100, mergedThisRun: 0,
       outcome: null, complete: false, caughtUp: false, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' });

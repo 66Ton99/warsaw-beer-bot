@@ -333,16 +333,30 @@ async function initPopup(): Promise<void> {
     widget.hidden = false;
     let latestView: SyncWidgetView | null = null;
     let pendingRecheckFeedback = false;
+    let recheckSawMerged = false;
+    let returnFocusToSync = false;
     const render = (s: SyncStatusView) => {
       latestView = syncWidgetView({ ...s, mode }, new Date());
-      if (pendingRecheckFeedback && !s.running) {
-        pendingRecheckFeedback = false;
-        syncStatus.textContent = s.outcome === 'done' && s.caughtUp ? recheckFeedbackText(s.mergedThisRun) : '';
+      if (pendingRecheckFeedback) {
+        if (s.mergedThisRun > 0) recheckSawMerged = true;
+        if (!s.running) {
+          pendingRecheckFeedback = false;
+          const anyMerged = recheckSawMerged;
+          recheckSawMerged = false;
+          syncStatus.textContent = s.outcome === 'done' && s.caughtUp ? recheckFeedbackText(anyMerged ? 1 : 0) : '';
+        } else {
+          syncStatus.textContent = '';
+        }
       } else {
         // The popup's own messages (Starting…, Stopping…) give way to the state they were about.
         syncStatus.textContent = '';
       }
       renderSyncWidget(nodes, latestView);
+      if (returnFocusToSync) {
+        returnFocusToSync = false;
+        if (!syncBtn.hidden) syncBtn.focus();
+        else if (recheckBtn && !recheckBtn.hidden) recheckBtn.focus();
+      }
     };
     const poll = () => {
       chrome.runtime.sendMessage({ type: 'checkin-sync:status' }, (s?: SyncStatusView) => {
@@ -363,6 +377,8 @@ async function initPopup(): Promise<void> {
     };
     const triggerSync = async (clearFirst: boolean) => {
       pendingRecheckFeedback = !clearFirst;
+      recheckSawMerged = false;
+      returnFocusToSync = document.activeElement === syncBtn || document.activeElement === recheckBtn;
       setSyncButtonsDisabled(true);
       syncStatus.textContent = clearFirst ? 'Clearing…' : 'Starting…';
       // Fetching the user's feed needs the untappd.com host permission (optional,
@@ -376,6 +392,8 @@ async function initPopup(): Promise<void> {
       const granted = await chrome.permissions.request({ origins: ['https://untappd.com/*'] });
       if (!granted) {
         pendingRecheckFeedback = false;
+        recheckSawMerged = false;
+        returnFocusToSync = false;
         chrome.runtime.sendMessage({ type: 'checkin-sync:not-starting' }, () => { void chrome.runtime.lastError; });
         syncStatus.textContent = 'Allow access to untappd.com to sync your check-ins.';
         setSyncButtonsDisabled(false);
@@ -391,6 +409,8 @@ async function initPopup(): Promise<void> {
         });
         if (!cleared) {
           pendingRecheckFeedback = false;
+          recheckSawMerged = false;
+          returnFocusToSync = false;
           syncStatus.textContent = 'Could not clear the check-ins stored in this browser.';
           setSyncButtonsDisabled(false);
           return;
