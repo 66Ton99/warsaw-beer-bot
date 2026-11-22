@@ -257,13 +257,13 @@ export function createSyncScheduler(deps: SchedulerDeps) {
       lastAttemptCap = null;
       // Counted before the request, like the budget.
       await deps.store.set(CHECKS_KEY, { date: today, count: count + 1 });
-      await deps.store.set(LAST_CHECK_KEY, now.toISOString());
       const started = await withIntent(async (i) => {
         if (i) return false;
         await writeIntent({ id: newId(), kind: 'silent', startedAt: now.toISOString(), silentPagesUsed: 0 });
         return true;
       });
       if (!started) return 'running';
+      await deps.store.set(LAST_CHECK_KEY, now.toISOString());
       void loop();
       return 'started';
     })();

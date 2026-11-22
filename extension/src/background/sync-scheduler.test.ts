@@ -529,12 +529,11 @@ describe('checkIfStale and LAST_CHECK_KEY', () => {
   });
 
   it.each([
-    ['at exact minAgeMs boundary', '2026-11-22T10:00:00.000Z'],
-    ['when LAST_CHECK_KEY is absent', undefined],
-    ['when clock moves backwards', '2026-11-22T12:00:00.000Z'],
-  ])('starts check() %s', async (_label, lastCheckAt) => {
+    ['at exact minAgeMs boundary', { [LAST_CHECK_KEY]: '2026-11-22T10:00:00.000Z' }],
+    ['when LAST_CHECK_KEY is absent', {}],
+    ['when clock moves backwards', { [LAST_CHECK_KEY]: '2026-11-22T12:00:00.000Z' }],
+  ])('starts check() %s', async (_label, init) => {
     const runStep = vi.fn(async () => outcome('done'));
-    const init = lastCheckAt === undefined ? {} : { [LAST_CHECK_KEY]: lastCheckAt };
     const t = setup({ runStep }, memoryStore(init));
     t.setNow(new Date('2026-11-22T11:00:00.000Z'));
     expect(await t.scheduler.checkIfStale(60 * 60_000)).toBe('started');
@@ -642,14 +641,16 @@ describe('checkIfStale and LAST_CHECK_KEY', () => {
     expect(await Promise.all([p1, p2])).toEqual(['paused', 'paused']);
 
     let releaseReservedPerm!: (v: boolean) => void;
+    const hasReservedPerm = vi.fn(() => new Promise<boolean>((resolve) => { releaseReservedPerm = resolve; }));
     const t3 = setup({
-      hasUntappdPermission: () => new Promise<boolean>((resolve) => { releaseReservedPerm = resolve; }),
+      hasUntappdPermission: hasReservedPerm,
       runStep: async () => outcome('done'),
     }, memoryStore({
       [CHECKS_KEY]: { date: '2026-11-22', count: MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS },
     }));
     t3.setNow(new Date(2026, 10, 22, 18, 0, 0));
     const activityCheck = t3.scheduler.checkIfStale(60 * 60_000, { reserveForAlarm: true });
+    await vi.waitFor(() => expect(hasReservedPerm).toHaveBeenCalledTimes(1));
     const alarmCheck = t3.scheduler.check();
     releaseReservedPerm(true);
     expect(await Promise.all([activityCheck, alarmCheck])).toEqual(['daily_limit', 'started']);
