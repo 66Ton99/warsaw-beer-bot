@@ -31,7 +31,7 @@
   </head>
   <body>
     <h1>Warsaw Beer Overlay — Privacy Policy</h1>
-    <p class="updated">Last updated: 7 November 2026</p>
+    <p class="updated">Last updated: 23 November 2026</p>
 
     <p>
       Warsaw Beer Overlay ("the extension") is a browser extension that shows, on supported
@@ -84,19 +84,22 @@
     </p>
     <p>
       With a bot token, once that access is granted, the extension also looks for new check-ins in
-      the background — when the browser starts and every six hours, at most four times a day — and
-      sends them the same way, even if you have never pressed the button. Without that access, no
-      Untappd data is read. Turning "Find missing beers via Untappd" off withdraws the access, and so
-      does removing it in Chrome's settings for the extension.
+      the background — when the browser starts, every six hours, after an extension update if six
+      hours have passed since the last check, and when you open a supported shop (at most once
+      every two hours, reserving one check for the six-hour schedule) — at most four times a day in
+      total, and sends them the same way, even if you have never pressed the button. Without that
+      access, no Untappd data is read. Turning "Find missing beers via Untappd" off withdraws the
+      access, and so does removing it in Chrome's settings for the extension.
     </p>
     <p>
       Without a bot token, the same button keeps your check-ins in this browser only: the extension
       reads your own Untappd feed within your logged-in session and stores the beers you have drunk
       and your ratings in the browser's local database (IndexedDB). This history is not sent
-      anywhere. After your first sync, the extension also looks for new check-ins in the background a
-      few times a day and stores them the same way; before you press the button, it reads nothing from
-      Untappd. You can delete the history with "Clear local check-ins" on the options page;
-      uninstalling the extension deletes it too.
+      anywhere. After your first sync, the extension also looks for new check-ins in the background
+      on that same schedule (at browser start, every six hours, after an update if due, and when you
+      open a supported shop, at most four times a day) and stores them the same way; before you
+      press the button, it reads nothing from Untappd. You can delete the history with "Clear local
+      check-ins" on the options page; uninstalling the extension deletes it too.
     </p>
 
     <h2>Anonymous usage statistics (on by default, can be switched off)</h2>

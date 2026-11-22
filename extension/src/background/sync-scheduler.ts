@@ -21,7 +21,9 @@ export const INTENT_KEY = 'syncIntent';
 export const PAUSE_KEY = 'syncPause';
 export const CHECKS_KEY = 'syncChecks';
 export const LAST_CHECK_KEY = 'syncLastCheckAt';
-export const ACTIVITY_CHECK_COOLDOWN_MS = 60 * 60 * 1000;
+export const ACTIVITY_CHECK_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+export const ACTIVITY_RESERVED_SLOTS = 1;
+export const ATTEMPT_THROTTLE_MS = 60_000;
 
 export interface SyncIntent {
   /** A fresh id per start: settling one intent never removes another written meanwhile. */
@@ -79,7 +81,10 @@ export interface SchedulerDeps {
 }
 
 export type CheckResult = 'started' | 'no_permission' | 'no_token' | 'never_synced' | 'running' | 'paused' | 'daily_limit';
-export type StaleCheckResult = CheckResult | 'fresh';
+export type StaleCheckResult = CheckResult | 'fresh' | 'throttled';
+export interface StaleCheckOptions {
+  reserveForAlarm?: boolean;
+}
 
 export function nextLocalMidnight(now: Date): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
@@ -103,6 +108,8 @@ function emptyOutcome(status: SyncOutcome['status']): SyncOutcome {
 export function createSyncScheduler(deps: SchedulerDeps) {
   let loopPromise: Promise<void> | null = null;
   let checkInFlight: Promise<CheckResult> | null = null;
+  let lastAttemptMs: number | null = null;
+  let lastAttemptCap: number | null = null;
   let controller: AbortController | null = null;
   // The last intent this instance read or wrote: afterPage is synchronous.
   let current: SyncIntent | null = null;
@@ -225,16 +232,89 @@ export function createSyncScheduler(deps: SchedulerDeps) {
     }
   }
 
+  async function runCheck(maxChecks: number): Promise<CheckResult> {
+    if (checkInFlight) {
+      const res = await checkInFlight;
+      return res === 'started' ? 'running' : res;
+    }
+    const run = (async (): Promise<CheckResult> => {
+      // Never asks for the permission itself: only uses one the person gave.
+      if (!(await deps.hasUntappdPermission())) return 'no_permission';
+      if (!(await deps.hasToken())) return 'no_token';
+      if (!(await deps.mayCheckQuietly())) return 'never_synced';
+      if (loopPromise || (await readIntent())) return 'running';
+      const now = deps.now();
+      const pause = await deps.store.get<{ until: string }>(PAUSE_KEY);
+      if (pause && Date.parse(pause.until) > now.getTime()) return 'paused';
+      const today = localDate(now);
+      const checks = await deps.store.get<{ date: string; count: number }>(CHECKS_KEY);
+      const count = checks && checks.date === today ? checks.count : 0;
+      if (count >= maxChecks) return 'daily_limit';
+      lastAttemptMs = null;
+      lastAttemptCap = null;
+      // Counted before the request, like the budget.
+      await deps.store.set(CHECKS_KEY, { date: today, count: count + 1 });
+      await deps.store.set(LAST_CHECK_KEY, now.toISOString());
+      const started = await withIntent(async (i) => {
+        if (i) return false;
+        await writeIntent({ id: newId(), kind: 'silent', startedAt: now.toISOString(), silentPagesUsed: 0 });
+        return true;
+      });
+      if (!started) return 'running';
+      void loop();
+      return 'started';
+    })();
+    checkInFlight = run;
+    try {
+      return await run;
+    } finally {
+      if (checkInFlight === run) checkInFlight = null;
+    }
+  }
+
+  const check = (): Promise<CheckResult> => {
+    lastAttemptMs = null;
+    lastAttemptCap = null;
+    return runCheck(MAX_CHECKS_PER_DAY);
+  };
+
+  async function checkIfStale(minAgeMs = CHECK_PERIOD_MINUTES * 60_000, opts?: StaleCheckOptions): Promise<StaleCheckResult> {
+    if (checkInFlight) {
+      const res = await checkInFlight;
+      return res === 'started' ? 'running' : res;
+    }
+    if (loopPromise) return 'running';
+    const maxChecks = opts?.reserveForAlarm ? Math.max(0, MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS) : MAX_CHECKS_PER_DAY;
+    if (lastAttemptMs !== null && lastAttemptCap !== null && maxChecks <= lastAttemptCap) {
+      const since = deps.now().getTime() - lastAttemptMs;
+      if (since >= 0 && since < ATTEMPT_THROTTLE_MS) return 'throttled';
+    }
+    if (await readIntent()) return 'running';
+    const lastAt = await deps.store.get<string>(LAST_CHECK_KEY);
+    const lastMs = typeof lastAt === 'string' ? Date.parse(lastAt) : NaN;
+    const elapsed = deps.now().getTime() - lastMs;
+    if (Number.isFinite(elapsed) && elapsed >= 0 && elapsed < minAgeMs) return 'fresh';
+    const res = await runCheck(maxChecks);
+    if (res !== 'started' && res !== 'running') {
+      lastAttemptMs = deps.now().getTime();
+      lastAttemptCap = maxChecks;
+    }
+    return res;
+  }
+
   return {
     get running(): boolean { return loopPromise !== null; },
 
     async startManual(): Promise<{ alreadyRunning: boolean }> {
       const alreadyRunning = loopPromise !== null;
+      lastAttemptMs = null;
+      lastAttemptCap = null;
       await deps.store.remove(PAUSE_KEY);
-      await deps.store.set(LAST_CHECK_KEY, deps.now().toISOString());
       // A new id even over a running silent intent: a settle of the silent one keeps this start.
       // A fresh press is a fresh request: its age starts now, so the day limit cannot expire it early.
-      await withIntent((i) => writeIntent({ id: newId(), kind: 'manual', startedAt: deps.now().toISOString(), silentPagesUsed: i?.silentPagesUsed ?? 0 }));
+      const nowIso = deps.now().toISOString();
+      await withIntent((i) => writeIntent({ id: newId(), kind: 'manual', startedAt: nowIso, silentPagesUsed: i?.silentPagesUsed ?? 0 }));
+      await deps.store.set(LAST_CHECK_KEY, nowIso);
       void loop();
       return { alreadyRunning };
     },
@@ -248,49 +328,8 @@ export function createSyncScheduler(deps: SchedulerDeps) {
       return had;
     },
 
-    async check(): Promise<CheckResult> {
-      if (checkInFlight) return 'running';
-      const run = (async (): Promise<CheckResult> => {
-        // Never asks for the permission itself: only uses one the person gave.
-        if (!(await deps.hasUntappdPermission())) return 'no_permission';
-        if (!(await deps.hasToken())) return 'no_token';
-        if (!(await deps.mayCheckQuietly())) return 'never_synced';
-        if (loopPromise || (await readIntent())) return 'running';
-        const now = deps.now();
-        const pause = await deps.store.get<{ until: string }>(PAUSE_KEY);
-        if (pause && Date.parse(pause.until) > now.getTime()) return 'paused';
-        const today = localDate(now);
-        const checks = await deps.store.get<{ date: string; count: number }>(CHECKS_KEY);
-        const count = checks && checks.date === today ? checks.count : 0;
-        if (count >= MAX_CHECKS_PER_DAY) return 'daily_limit';
-        // Counted before the request, like the budget.
-        await deps.store.set(CHECKS_KEY, { date: today, count: count + 1 });
-        await deps.store.set(LAST_CHECK_KEY, now.toISOString());
-        const started = await withIntent(async (i) => {
-          if (i) return false;
-          await writeIntent({ id: newId(), kind: 'silent', startedAt: now.toISOString(), silentPagesUsed: 0 });
-          return true;
-        });
-        if (!started) return 'running';
-        void loop();
-        return 'started';
-      })();
-      checkInFlight = run;
-      try {
-        return await run;
-      } finally {
-        if (checkInFlight === run) checkInFlight = null;
-      }
-    },
-
-    async checkIfStale(minAgeMs = CHECK_PERIOD_MINUTES * 60_000): Promise<StaleCheckResult> {
-      if (checkInFlight || loopPromise || (await readIntent())) return 'running';
-      const lastAt = await deps.store.get<string>(LAST_CHECK_KEY);
-      const lastMs = typeof lastAt === 'string' ? Date.parse(lastAt) : NaN;
-      const elapsed = deps.now().getTime() - lastMs;
-      if (Number.isFinite(elapsed) && elapsed >= 0 && elapsed < minAgeMs) return 'fresh';
-      return this.check();
-    },
+    check,
+    checkIfStale,
 
     /** Worker start and the watchdog alarm: continue an intent nobody is running. */
     async resume(): Promise<void> {

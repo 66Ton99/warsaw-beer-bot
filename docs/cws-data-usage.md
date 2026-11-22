@@ -24,8 +24,10 @@ domains + `beer-api` + optional hosts) — paste the consolidated text from
   enrichment/check-in submission.
 - **optional host `untappd.com`** — requested only when the user enables enrichment or presses
   "Sync": read the user's own Untappd check-in feed / run searches from their session. Once
-  granted, the 6-hourly check (#934) reads the feed for new check-ins too — with a bot token
-  right away, without one only after the first manual Sync (#924).
+  granted, quiet checks (#934) read the feed for new check-ins at browser start, every 6 hours,
+  after an update if 6 hours have passed, and when opening a supported shop (at most once every 2
+  hours, reserving 1 of the 4 daily checks for the 6-hour schedule) — with a bot token right away,
+  without one only after the first manual Sync (#924).
 - **optional host `*.algolia.net`** — Untappd's search backend, used by the optional
   enrichment feature to find missing beers.
 

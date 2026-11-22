@@ -6,7 +6,7 @@ import { FeedVerdict, feedFailure, runCheckinSync, type SyncOutcome, type SyncPr
 import { isBlockPage } from '../../../src/shared/untappd/block';
 import {
   ACTIVITY_CHECK_COOLDOWN_MS, CHECK_ALARM, CHECK_PERIOD_MINUTES, INTENT_KEY, WATCHDOG_ALARM, createSyncScheduler,
-  type SchedulerReport, type StepRequest,
+  type SchedulerReport, type StaleCheckResult, type StepRequest,
 } from './sync-scheduler';
 import { sessionUsername } from '../../../src/shared/untappd/session-user';
 import type { AlgoliaQuery, AlgoliaResponse, EnrichCandidate, EnrichResult, MatchResult, MatchCacheBinding, RawBeer, CheckinSyncState } from '../api/types';
@@ -795,20 +795,28 @@ async function ensureCheckAlarm(): Promise<void> {
   if (!(await chrome.alarms.get(CHECK_ALARM))) await chrome.alarms.create(CHECK_ALARM, { periodInMinutes: CHECK_PERIOD_MINUTES });
 }
 
+export function checkOnInstalled(): Promise<StaleCheckResult> {
+  return syncScheduler.checkIfStale();
+}
+
+export function checkOnShopActivity(): Promise<StaleCheckResult> {
+  return syncScheduler.checkIfStale(ACTIVITY_CHECK_COOLDOWN_MS, { reserveForAlarm: true });
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   void ensureInstall();
   void ensureCheckAlarm().catch(() => undefined);
-  void syncScheduler.checkIfStale();
+  void checkOnInstalled().catch(() => undefined);
 });
 chrome.runtime.onStartup.addListener(() => {
   void ensureInstall();
   void ensureCheckAlarm().catch(() => undefined);
-  void syncScheduler.check();
+  void syncScheduler.check().catch(() => undefined);
 });
 chrome.permissions.onAdded.addListener((p) => { void handleUntappdPermissionAdded(p.origins); });
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === WATCHDOG_ALARM) void syncScheduler.resume();
-  if (alarm.name === CHECK_ALARM) void syncScheduler.check();
+  if (alarm.name === WATCHDOG_ALARM) void syncScheduler.resume().catch(() => undefined);
+  if (alarm.name === CHECK_ALARM) void syncScheduler.check().catch(() => undefined);
 });
 // Chrome does not promise alarms survive every restart/update: restore the 6-hourly check alarm on worker start.
 void ensureCheckAlarm().catch(() => undefined);
@@ -821,7 +829,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   void ensureInstall();
   const t = (message as { type?: unknown }).type;
   if (t === 'match') {
-    void syncScheduler.checkIfStale(ACTIVITY_CHECK_COOLDOWN_MS);
+    void checkOnShopActivity().catch(() => undefined);
     handleMatch(message as MatchMessage, shopOf(sender.tab?.url)).then(sendResponse);
     return true;
   }
@@ -829,7 +837,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (t === 'enrich:candidates') { handleEnrichCandidates(message as EnrichCandidatesMessage).then(sendResponse); return true; }
   if (t === 'enrich:result') { handleEnrichResult(message as EnrichResultMessage).then(sendResponse); return true; }
   if (t === 'cache:get-many') {
-    void syncScheduler.checkIfStale(ACTIVITY_CHECK_COOLDOWN_MS);
+    void checkOnShopActivity().catch(() => undefined);
     handleCacheGetMany(message.keys).then(results => sendResponse({ results }));
     return true;
   }

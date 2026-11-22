@@ -60,6 +60,11 @@ function checkins(n: number): string {
   return n === 1 ? '1 check-in' : `${count(n)} check-ins`;
 }
 
+export function recheckFeedbackText(mergedThisRun: number): string {
+  if (mergedThisRun <= 0) return 'No new check-ins.';
+  return mergedThisRun === 1 ? 'Added 1 new check-in.' : `Added ${count(mergedThisRun)} new check-ins.`;
+}
+
 /** #934 §6: one label, one bar, one action per sync state. */
 export function syncWidgetView(s: SyncStatusView, now: Date): SyncWidgetView {
   const p = syncPercent(s.serverCount, s.profileTotal);
@@ -148,6 +153,7 @@ interface SyncWidgetNodes {
 
 /** The only code that writes a SyncWidgetView into the DOM. */
 export function renderSyncWidget(n: SyncWidgetNodes, v: SyncWidgetView): void {
+  const active = typeof document !== 'undefined' ? document.activeElement : null;
   n.label.textContent = v.label;
   n.label.classList.toggle('is-error', v.tone === 'error');
   n.bar.hidden = v.bar === null;
@@ -168,6 +174,11 @@ export function renderSyncWidget(n: SyncWidgetNodes, v: SyncWidgetView): void {
   if (n.recheckButton) {
     n.recheckButton.hidden = !v.recheck;
     n.recheckButton.disabled = false;
+  }
+  if (active === n.recheckButton && !v.recheck && v.action !== null) {
+    n.button.focus();
+  } else if (active === n.button && v.action === null && v.recheck && n.recheckButton) {
+    n.recheckButton.focus();
   }
 }
 
@@ -322,10 +333,16 @@ async function initPopup(): Promise<void> {
     const nodes = widgetNodes as SyncWidgetNodes;
     widget.hidden = false;
     let latestView: SyncWidgetView | null = null;
+    let pendingRecheckFeedback = false;
     const render = (s: SyncStatusView) => {
       latestView = syncWidgetView({ ...s, mode }, new Date());
-      // The popup's own messages (Starting…, Stopping…) give way to the state they were about.
-      syncStatus.textContent = '';
+      if (pendingRecheckFeedback && !s.running) {
+        pendingRecheckFeedback = false;
+        syncStatus.textContent = s.outcome === 'done' && s.caughtUp ? recheckFeedbackText(s.mergedThisRun) : '';
+      } else {
+        // The popup's own messages (Starting…, Stopping…) give way to the state they were about.
+        syncStatus.textContent = '';
+      }
       renderSyncWidget(nodes, latestView);
     };
     const poll = () => {
@@ -346,6 +363,7 @@ async function initPopup(): Promise<void> {
       if (recheckBtn) recheckBtn.disabled = disabled;
     };
     const triggerSync = async (clearFirst: boolean) => {
+      pendingRecheckFeedback = !clearFirst;
       setSyncButtonsDisabled(true);
       syncStatus.textContent = clearFirst ? 'Clearing…' : 'Starting…';
       // Fetching the user's feed needs the untappd.com host permission (optional,
@@ -358,6 +376,7 @@ async function initPopup(): Promise<void> {
       if (!clearFirst) chrome.runtime.sendMessage({ type: 'checkin-sync:awaiting-permission' }, () => { void chrome.runtime.lastError; });
       const granted = await chrome.permissions.request({ origins: ['https://untappd.com/*'] });
       if (!granted) {
+        pendingRecheckFeedback = false;
         chrome.runtime.sendMessage({ type: 'checkin-sync:not-starting' }, () => { void chrome.runtime.lastError; });
         syncStatus.textContent = 'Allow access to untappd.com to sync your check-ins.';
         setSyncButtonsDisabled(false);
@@ -372,6 +391,7 @@ async function initPopup(): Promise<void> {
           });
         });
         if (!cleared) {
+          pendingRecheckFeedback = false;
           syncStatus.textContent = 'Could not clear the check-ins stored in this browser.';
           setSyncButtonsDisabled(false);
           return;
@@ -388,6 +408,7 @@ async function initPopup(): Promise<void> {
     };
     syncBtn.addEventListener('click', () => {
       if (latestView?.action?.kind === 'stop') {
+        pendingRecheckFeedback = false;
         setSyncButtonsDisabled(true);
         syncStatus.textContent = 'Stopping…';
         chrome.runtime.sendMessage({ type: 'checkin-sync:stop' }, () => { void chrome.runtime.lastError; });

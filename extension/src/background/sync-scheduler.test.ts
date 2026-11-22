@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import type { CheckinSyncPageResult } from '../api/types';
 import type { SyncOutcome } from './handle-checkin-sync';
 import {
-  CHECKS_KEY, INTENT_KEY, LAST_CHECK_KEY, PAUSE_KEY, SILENT_BUDGET, WATCHDOG_ALARM,
+  ACTIVITY_RESERVED_SLOTS, ATTEMPT_THROTTLE_MS, CHECKS_KEY, INTENT_KEY, LAST_CHECK_KEY, MAX_CHECKS_PER_DAY,
+  PAUSE_KEY, SILENT_BUDGET, WATCHDOG_ALARM,
   createSyncScheduler, localDate, nextLocalMidnight, pagesNeeded,
   type SchedulerDeps, type SchedulerReport, type StepRequest, type SyncIntent,
 } from './sync-scheduler';
@@ -491,17 +492,28 @@ describe('resume', () => {
 });
 
 describe('checkIfStale and LAST_CHECK_KEY', () => {
-  it('check() and startManual() record LAST_CHECK_KEY', async () => {
-    const t = setup();
+  it('check() and startManual() record LAST_CHECK_KEY, with startManual writing it after INTENT_KEY', async () => {
+    const writes: string[] = [];
+    const base = memoryStore();
+    const store = {
+      ...base,
+      set: async (k: string, v: unknown) => {
+        writes.push(k);
+        await base.set(k, v);
+      },
+    };
+    const t = setup({}, store as never);
     t.setNow(new Date('2026-11-22T10:00:00.000Z'));
     expect(await t.scheduler.check()).toBe('started');
     await t.scheduler.idle();
-    expect(t.store.data.get(LAST_CHECK_KEY)).toBe('2026-11-22T10:00:00.000Z');
+    expect(base.data.get(LAST_CHECK_KEY)).toBe('2026-11-22T10:00:00.000Z');
 
+    writes.length = 0;
     t.setNow(new Date('2026-11-22T10:30:00.000Z'));
     await t.scheduler.startManual();
     await t.scheduler.idle();
-    expect(t.store.data.get(LAST_CHECK_KEY)).toBe('2026-11-22T10:30:00.000Z');
+    expect(base.data.get(LAST_CHECK_KEY)).toBe('2026-11-22T10:30:00.000Z');
+    expect(writes).toEqual([INTENT_KEY, LAST_CHECK_KEY]);
   });
 
   it('returns fresh without running or spending daily quota when elapsed < minAgeMs', async () => {
@@ -516,27 +528,77 @@ describe('checkIfStale and LAST_CHECK_KEY', () => {
     expect(t.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: 1 });
   });
 
-  it('starts check() at exact minAgeMs boundary, when LAST_CHECK_KEY is absent, and when clock moves backwards', async () => {
+  it.each([
+    ['at exact minAgeMs boundary', '2026-11-22T10:00:00.000Z'],
+    ['when LAST_CHECK_KEY is absent', undefined],
+    ['when clock moves backwards', '2026-11-22T12:00:00.000Z'],
+  ])('starts check() %s', async (_label, lastCheckAt) => {
     const runStep = vi.fn(async () => outcome('done'));
-    const t1 = setup({ runStep }, memoryStore({ [LAST_CHECK_KEY]: '2026-11-22T10:00:00.000Z' }));
-    t1.setNow(new Date('2026-11-22T11:00:00.000Z'));
-    expect(await t1.scheduler.checkIfStale(60 * 60_000)).toBe('started');
-    await t1.scheduler.idle();
+    const init = lastCheckAt === undefined ? {} : { [LAST_CHECK_KEY]: lastCheckAt };
+    const t = setup({ runStep }, memoryStore(init));
+    t.setNow(new Date('2026-11-22T11:00:00.000Z'));
+    expect(await t.scheduler.checkIfStale(60 * 60_000)).toBe('started');
+    await t.scheduler.idle();
     expect(runStep).toHaveBeenCalledTimes(1);
+  });
 
-    const runStep2 = vi.fn(async () => outcome('done'));
-    const t2 = setup({ runStep: runStep2 });
-    t2.setNow(new Date('2026-11-22T11:00:00.000Z'));
-    expect(await t2.scheduler.checkIfStale(60 * 60_000)).toBe('started');
+  it('returns running when an intent is stored or the loop is active', async () => {
+    const intent: SyncIntent = { id: 'a', kind: 'manual', startedAt: '2026-11-22T10:00:00.000Z', silentPagesUsed: 0 };
+    const tStored = setup({ runStep: never }, memoryStore({ [INTENT_KEY]: intent }));
+    expect(await tStored.scheduler.checkIfStale(60 * 60_000)).toBe('running');
+
+    const tLoop = setup({ runStep: never });
+    await tLoop.scheduler.startManual();
+    expect(await tLoop.scheduler.checkIfStale(60 * 60_000)).toBe('running');
+  });
+
+  it('reserveForAlarm stops at MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS while check() uses the reserved slot', async () => {
+    const t = setup();
+    const limit = MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS;
+    for (let i = 0; i < limit; i++) {
+      t.setNow(new Date(2026, 10, 22, 10 + i * 2, 0, 0));
+      expect(await t.scheduler.checkIfStale(60 * 60_000, { reserveForAlarm: true })).toBe('started');
+      await t.scheduler.idle();
+    }
+    t.setNow(new Date(2026, 10, 22, 18, 0, 0));
+    expect(await t.scheduler.checkIfStale(60 * 60_000, { reserveForAlarm: true })).toBe('daily_limit');
+    expect(t.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: limit });
+
+    expect(await t.scheduler.check()).toBe('started');
+    await t.scheduler.idle();
+    expect(t.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: MAX_CHECKS_PER_DAY });
+  });
+
+  it('throttles repeated non-starting checks (daily_limit and paused) without I/O until ATTEMPT_THROTTLE_MS or startManual()', async () => {
+    const hasUntappdPermission = vi.fn(async () => true);
+    const t1 = setup({ hasUntappdPermission }, memoryStore({
+      [CHECKS_KEY]: { date: '2026-11-22', count: MAX_CHECKS_PER_DAY },
+    }));
+    t1.setNow(new Date(2026, 10, 22, 12, 0, 0));
+    expect(await t1.scheduler.checkIfStale(60 * 60_000)).toBe('daily_limit');
+    hasUntappdPermission.mockClear();
+
+    t1.setNow(new Date(2026, 10, 22, 12, 0, 30));
+    expect(await t1.scheduler.checkIfStale(60 * 60_000)).toBe('throttled');
+    expect(hasUntappdPermission).toHaveBeenCalledTimes(0);
+
+    t1.setNow(new Date(2026, 10, 22, 12, 0, 0, ATTEMPT_THROTTLE_MS));
+    expect(await t1.scheduler.checkIfStale(60 * 60_000)).toBe('daily_limit');
+    expect(hasUntappdPermission).toHaveBeenCalledTimes(1);
+
+    const hasPerm2 = vi.fn(async () => true);
+    const t2 = setup({ hasUntappdPermission: hasPerm2 }, memoryStore({
+      [PAUSE_KEY]: { until: new Date(2026, 10, 23, 0, 0, 0).toISOString() },
+    }));
+    t2.setNow(new Date(2026, 10, 22, 12, 0, 0));
+    expect(await t2.scheduler.checkIfStale(60 * 60_000)).toBe('paused');
+    hasPerm2.mockClear();
+    expect(await t2.scheduler.checkIfStale(60 * 60_000)).toBe('throttled');
+    expect(hasPerm2).toHaveBeenCalledTimes(0);
+
+    await t2.scheduler.startManual();
     await t2.scheduler.idle();
-    expect(runStep2).toHaveBeenCalledTimes(1);
-
-    const runStep3 = vi.fn(async () => outcome('done'));
-    const t3 = setup({ runStep: runStep3 }, memoryStore({ [LAST_CHECK_KEY]: '2026-11-22T12:00:00.000Z' }));
-    t3.setNow(new Date('2026-11-22T11:00:00.000Z'));
-    expect(await t3.scheduler.checkIfStale(60 * 60_000)).toBe('started');
-    await t3.scheduler.idle();
-    expect(runStep3).toHaveBeenCalledTimes(1);
+    expect(await t2.scheduler.checkIfStale(60 * 60_000)).toBe('fresh');
   });
 
   it('does not write LAST_CHECK_KEY or CHECKS_KEY when mayCheckQuietly or permission is false', async () => {
@@ -554,19 +616,29 @@ describe('checkIfStale and LAST_CHECK_KEY', () => {
     expect(runStep).toHaveBeenCalledTimes(0);
   });
 
-  it('serializes concurrent check() calls so only one daily slot is spent', async () => {
+  it('serializes concurrent check() calls and propagates non-started outcomes', async () => {
     let releasePerm!: (v: boolean) => void;
-    const t = setup({
+    const t1 = setup({
       hasUntappdPermission: () => new Promise<boolean>((resolve) => { releasePerm = resolve; }),
       runStep: async () => outcome('done'),
     });
-    t.setNow(new Date(2026, 10, 22, 12, 0, 0));
-    const first = t.scheduler.check();
-    const second = t.scheduler.check();
+    t1.setNow(new Date(2026, 10, 22, 12, 0, 0));
+    const first = t1.scheduler.check();
+    const second = t1.scheduler.check();
     releasePerm(true);
     expect(await first).toBe('started');
     expect(await second).toBe('running');
-    await t.scheduler.idle();
-    expect(t.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: 1 });
+    await t1.scheduler.idle();
+    expect(t1.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: 1 });
+
+    let releasePausePerm!: (v: boolean) => void;
+    const t2 = setup({
+      hasUntappdPermission: () => new Promise<boolean>((resolve) => { releasePausePerm = resolve; }),
+    }, memoryStore({ [PAUSE_KEY]: { until: new Date(2026, 10, 23, 0, 0, 0).toISOString() } }));
+    t2.setNow(new Date(2026, 10, 22, 12, 0, 0));
+    const p1 = t2.scheduler.check();
+    const p2 = t2.scheduler.check();
+    releasePausePerm(true);
+    expect(await Promise.all([p1, p2])).toEqual(['paused', 'paused']);
   });
 });
