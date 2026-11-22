@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, vi, type Mock } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { canRefresh, authNoteText, requestSyncStart, armLiveRegions, refreshResultText, refreshReplyText, beers,
-  count, syncPercent, syncWidgetView, type SyncStatusView } from './popup';
+  count, recheckFeedbackText, renderSyncWidget, syncPercent, syncWidgetView, type SyncStatusView } from './popup';
 import { SETUP_GUIDE_URL } from '../shared/config';
 
 describe('canRefresh', () => {
@@ -39,6 +39,50 @@ describe('syncPercent', () => {
   it('has no percentage without a positive profile total', () => {
     expect(syncPercent(10, null)).toBe(null);
     expect(syncPercent(10, 0)).toBe(null);
+  });
+});
+
+describe('recheckFeedbackText', () => {
+  it('formats zero, singular and plural merged check-in counts', () => {
+    expect(recheckFeedbackText(0)).toBe('No new check-ins.');
+    expect(recheckFeedbackText(1)).toBe('Added 1 new check-in.');
+    expect(recheckFeedbackText(1205)).toBe(`Added 1${N}205 new check-ins.`);
+  });
+});
+
+describe('renderSyncWidget focus transfer', () => {
+  it('moves focus between #syncRecheck and #syncCheckins when the active button becomes hidden', () => {
+    document.body.innerHTML = `
+      <button id="syncCheckins" type="button"><span>Sync</span></button>
+      <div id="syncWidget">
+        <p id="syncLabel"></p>
+        <button id="syncRecheck" type="button"></button>
+        <div id="syncBar"></div><div id="syncBarFill"></div>
+        <span id="syncDetail"></span><a id="syncLink"></a>
+      </div>
+    `;
+    const btn = document.getElementById('syncCheckins') as HTMLButtonElement;
+    const recheckBtn = document.getElementById('syncRecheck') as HTMLButtonElement;
+    const nodes = {
+      label: document.getElementById('syncLabel') as HTMLElement,
+      bar: document.getElementById('syncBar') as HTMLElement,
+      fill: document.getElementById('syncBarFill') as HTMLElement,
+      detail: document.getElementById('syncDetail') as HTMLElement,
+      link: document.getElementById('syncLink') as HTMLAnchorElement,
+      button: btn,
+      buttonLabel: btn.querySelector('span'),
+      recheckButton: recheckBtn,
+    };
+
+    renderSyncWidget(nodes, syncWidgetView({ ...base, outcome: 'done', serverCount: 100, profileTotal: 100, caughtUp: true }, NOW));
+    recheckBtn.focus();
+    expect(document.activeElement).toBe(recheckBtn);
+
+    renderSyncWidget(nodes, syncWidgetView({ ...base, running: true, serverCount: 100, profileTotal: 100 }, NOW));
+    expect(document.activeElement).toBe(btn);
+
+    renderSyncWidget(nodes, syncWidgetView({ ...base, outcome: 'done', serverCount: 100, profileTotal: 100, caughtUp: true }, NOW));
+    expect(document.activeElement).toBe(recheckBtn);
   });
 });
 
@@ -438,6 +482,27 @@ describe('initPopup', () => {
       .toBe('Allow access to untappd.com to sync your check-ins.'));
     expect(send.mock.calls.map(([m]) => m.type)).toEqual(['checkin-sync:awaiting-permission', 'checkin-sync:not-starting']);
     expect(recheckBtn.disabled).toBe(false);
+  });
+
+  it('shows No new check-ins. or Added N new check-ins. after clicking #syncRecheck, while ordinary open stays empty', async () => {
+    const caughtUpReply = { type: 'checkin-sync:status:ok', running: false, serverCount: 100, profileTotal: 100, mergedThisRun: 0,
+      outcome: 'done', complete: true, caughtUp: true, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' };
+    await bootPopup('tok', caughtUpReply);
+    expect(document.getElementById('syncStatus')?.textContent).toBe('');
+
+    const chromeStub = globalThis.chrome as unknown as { runtime: Record<string, unknown> };
+    let statusReply = caughtUpReply;
+    chromeStub.runtime.sendMessage = vi.fn((m: { type?: string }, callback?: (r?: object) => void) => {
+      callback?.(m.type === 'checkin-sync:status' ? statusReply : { type: 'checkin-sync:started', alreadyRunning: false });
+    });
+
+    const recheckBtn = document.getElementById('syncRecheck') as HTMLButtonElement;
+    recheckBtn.click();
+    await vi.waitFor(() => expect(document.getElementById('syncStatus')?.textContent).toBe('No new check-ins.'));
+
+    statusReply = { ...caughtUpReply, serverCount: 125, profileTotal: 125, mergedThisRun: 25 };
+    recheckBtn.click();
+    await vi.waitFor(() => expect(document.getElementById('syncStatus')?.textContent).toBe('Added 25 new check-ins.'));
   });
 
   it('hides the compact recheck button while running or on a gap', async () => {

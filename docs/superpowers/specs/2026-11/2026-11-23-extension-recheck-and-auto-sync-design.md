@@ -1,0 +1,94 @@
+# Кнопка оновлення біля «✓ Fully synced» і автосинк при відкритті крамниць
+
+Дата: 2026-11-23
+Статус: чернетка
+Spec-review: очікує запуску `detent cross-review --spec` після оцінки власника
+
+## Для власника
+
+**Мета.** Людина може перевірити нові чекіни прямо з popup у стані «✓ Fully synced» одним натисканням на компактну кнопку оновлення, а фонова перевірка підтягує свіжі чекіни не лише при старті браузера чи раз на 6 годин, а й після оновлення розширення та при відкритті підтримуваного магазину — без вичерпання денного ліміту на вечір.
+
+**Що зміниться для тебе.**
+- На хості нічого: `[deploy:hold]` не потрібен, бекенд і база даних на сервері не змінюються, нових дозволів у маніфесті немає.
+- Оновлюється публічна політика приватності (`site/privacy/index.html`, деплоїться з `main` через GitHub Pages) і чернетка CWS (`docs/cws-data-usage.md`): до тригерів фонової перевірки `untappd.com` додаються оновлення розширення (якщо минуло ≥ 6 год) і відкриття підтримуваної крамниці (не частіше разу на 2 год, із резервом під 6-год перевірку, у межах тих самих 4 разів на добу).
+- Після Reload або оновлення розширення 6-годинний будильник відновлюється на кожному старті service worker'а, а перша перевірка не чекає 6 годин, якщо час уже настав.
+
+**На чому стоїть рішення.**
+- Маленька кнопка оновлення поруч із «✓ Fully synced» і підсилення автоматичного синку `[вимога власника]`.
+- На macOS браузер часто не закривають повністю, тому `onStartup` не спрацьовує днями, а `onInstalled` відкладав будильник `wbb-sync-check` на +6 годин уперед `[проба]` (§Тіло, «Проби», 1).
+- На момент діагностики `untappd.com/user/66Ton99` уже мав 2 897 чекінів, тоді як у popup висів `✓ Fully synced` на 2 872, бо `syncChecks` востаннє оновлювався 2026-11-12 `[проба]` (§Тіло, «Проби», 1–2).
+- Спільний лічильник `MAX_CHECKS_PER_DAY = 4` без резерву при 1-год cooldown міг бути повністю витрачений удень на перегляді крамниць до вечірніх чекінів `[виведення]` (з `sync-scheduler.ts`: `MAX_CHECKS_PER_DAY = 4`).
+- Після натискання ↻ без нових чекінів користувач без підпису не розуміє, чи перевірка справді відбулась `[виведення]` (з поведінки `popup.ts`).
+
+**Ключові рішення.**
+1. **Спільний ліміт 4/добу з 2-годинним cooldown і резервом 1 слоту під 6-годинний будильник.** Перевірка з активності крамниць (`match` / `cache:get-many`) запускається не частіше разу на 2 год і зупиняється на 3 із 4 перевірок (`ACTIVITY_RESERVED_SLOTS = 1`), залишаючи 4-й слот для планового будильника або старту браузера. Відкинуто: 1-год cooldown без резерву — спалює всі 4 перевірки до обіду; окремий бюджет понад 4/добу — збільшує добове навантаження на `untappd.com` і вимагає зміни політики в бік більшої частоти.
+2. **In-memory throttle `ATTEMPT_THROTTLE_MS = 60_000` для не-стартових станів.** Якщо `checkIfStale` повертає `daily_limit`, `paused`, `never_synced`, `no_permission` чи `no_token`, повторні виклики в межах хвилини повертають `'throttled'` без жодного I/O (`permissions.contains`, `IndexedDB`, `storage.local`), а `startManual()` / `check()` скидають throttle. Відкинуто: запис у `syncLastCheckAt` при відмові — змішував би час відмови з часом реальної перевірки й блокував би перевірку навіть після виправлення причини; відсутність throttle — ганяла б `localMeta()` і `permissions` на кожній пачці карток.
+3. **Компактна кнопка `#syncRecheck` поруч із `✓ Fully synced`, короткий відгук і перенесення фокусу.** Після завершення ручної перевірки з `✓ Fully synced` показується `No new check-ins.` або `Added N new check-ins.`, а при зникненні активної кнопки фокус клавіатури переноситься між `#syncRecheck` і `#syncCheckins`. Відкинуто: постійно видима велика кнопка «Sync again» у стані `✓ Fully synced` — захаращує картку popup, коли все синхронізовано.
+4. **Запис `syncLastCheckAt` у `startManual()` після запису наміру (`withIntent`).** Запис до `withIntent` зсував перше читання сховища й ламав синхронізацію гонки старту та запиту статусу.
+5. **Розглянуто стандартне:** періодичний будильник кожні 1–2 години замість тригера на активність у крамницях — відкинуто, бо робить запити до `untappd.com` навіть тоді, коли користувач тижнями не заходить у крамниці.
+
+**Що стане гірше.**
+- При активному перегляді крамниць удень розширення може витратити до 3 із 4 добових перевірок раніше вечора (4-й слот гарантовано залишається для планової перевірки).
+- Якщо браузер не мав дозволу або локальної бази, перше відкриття крамниці раз на хвилину перевіряє ці умови (без запитів до `untappd.com`).
+- Політика приватності та CWS-відповіді описують додатковий тригер на активність у підтримуваних крамницях.
+
+**Оцінка.**
+- Власник: _очікує оцінки (XS–XL)_.
+- Автор: **S** — один PR, 4 логічні частини: планувальник + тригери воркера (~40%), popup UI + відгук + фокус (~25%), тести (~20%), політика приватності + `spec.md` + документи (~15%).
+- Дешевший варіант: **лише кнопка ↻ у popup без тригера на відкриття крамниць** (**XS**); втрачається автоматичне підтягування свіжих чекінів, коли браузер не перезапускали на macOS.
+
+**Питання до власника.**
+1. Яка твоя оцінка розміру цієї зміни (`XS`–`XL`)?
+2. Чи підтверджуєш параметри бюджету: cooldown 2 години для активності в крамницях і резерв 1 слоту з 4 під плановий 6-годинний будильник?
+
+## Тіло
+
+### Проби
+
+1. **Діагностика живого service worker'а у Chrome користувача (2026-11-22):**
+   - `chrome.alarms.getAll()` → `wbb-sync-check` (`periodInMinutes: 360`, `scheduledTime: 1795407522669.488`, тобто `2026-11-23T04:18:42.669Z` = рівно +6 год після Reload о `23:18 CET`).
+   - `chrome.storage.local` → `checkinSync`: `outcome: "done", caughtUp: true, serverCount: 2872, profileTotal: 2872, binding.username: "66ton99"`; `syncChecks`: `{ count: 1, date: "2026-11-12" }`; `syncIntent` і `syncPause` відсутні.
+   - `chrome.permissions.contains({ origins: ['https://untappd.com/*'] })` → `true`.
+2. **Жива проба профілю Untappd парсером `parseCheckinFeedPage` (2026-11-22):**
+   - `fetch('https://untappd.com/user/66Ton99')` → HTTP `200`, `profileTotal: 2897`, `checkins: 3`, останній чекін `'1617128509'` (`Sun, 22 Nov 2026 20:11:14 +0000`).
+
+### Архітектура
+
+1. **Планувальник (`extension/src/background/sync-scheduler.ts`):**
+   - Нові константи: `LAST_CHECK_KEY = 'syncLastCheckAt'`, `ACTIVITY_CHECK_COOLDOWN_MS = 2 * 60 * 60 * 1000`, `ACTIVITY_RESERVED_SLOTS = 1`, `ATTEMPT_THROTTLE_MS = 60_000`.
+   - `runCheck(maxChecks)` серіалізує паралельні виклики через `checkInFlight` (повертає точний результат першого виклику або `'running'`, якщо він `'started'`).
+   - `checkIfStale(minAgeMs = CHECK_PERIOD_MINUTES * 60_000, opts?: { reserveForAlarm?: boolean })`:
+     - перевіряє `checkInFlight` і `loopPromise`;
+     - перевіряє in-memory throttle `(lastAttemptMs, lastAttemptCap)` до будь-яких I/O;
+     - перевіряє `readIntent()`, потім `LAST_CHECK_KEY` (повертає `'fresh'`, якщо `0 <= elapsed < minAgeMs`);
+     - запускає `runCheck(maxChecks)`, де `maxChecks` з `reserveForAlarm: true` дорівнює `MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS` (3);
+     - якщо не стартувало і не `running`, фіксує `lastAttemptMs` і `lastAttemptCap`.
+   - `startManual()` оновлює `LAST_CHECK_KEY` **після** `withIntent(...)` і скидає in-memory throttle.
+2. **Service worker (`extension/src/background/index.ts`):**
+   - `ensureCheckAlarm().catch(() => undefined)` викликається на старті воркера, а також у `onInstalled` та `onStartup`.
+   - `checkOnInstalled()` викликає `syncScheduler.checkIfStale()` (6-год поріг); `checkOnShopActivity()` викликає `syncScheduler.checkIfStale(ACTIVITY_CHECK_COOLDOWN_MS, { reserveForAlarm: true })` з обробників `match` і `cache:get-many`. Усі фонові виклики приглушують unhandled rejection через `.catch(() => undefined)`.
+3. **Popup (`extension/src/popup/popup.html`, `popup.css`, `popup.ts`):**
+   - Кнопка `#syncRecheck` у `.sync-head` поруч із `#syncLabel` видима лише при `done && caughtUp`, мінімальний розмір 24×24 CSS px (`min-inline-size` / `min-block-size`), SVG із `aria-hidden="true"`.
+   - `recheckFeedbackText(mergedThisRun)` показує `No new check-ins.` або `Added N new check-ins.` лише після завершення ручної перевірки з цього popup.
+   - `renderSyncWidget` переносить фокус між `#syncRecheck` та `#syncCheckins`, коли активна кнопка стає `hidden`.
+
+### Тестування
+
+- `sync-scheduler.test.ts`: `LAST_CHECK_KEY` у `check()` і `startManual()` (після `writeIntent`), `checkIfStale` (`'fresh'`, границі через `it.each`, `INTENT_KEY` / `loopPromise` → `'running'`), `reserveForAlarm` (зупинка на 3 з 4, 4-й слот лишається для `check()`), throttle у `daily_limit` і `paused` без I/O та скидання після `startManual()`, серіалізація паралельних викликів.
+- `index.test.ts`: `onInstalled` (відсутній, застарілий і свіжий `LAST_CHECK_KEY`), `checkOnShopActivity` на `match` і `cache:get-many` із перевіркою `'fresh'` / `'daily_limit'` і збереженням резерву, без `setTimeout`-гонок.
+- `popup.test.ts`: `recheckFeedbackText`, видимість і клік `#syncRecheck`, відмова в дозволі, показ підсумку після перевірки, перенесення фокусу клавіатури.
+
+## Заявка → доказ
+
+| Заявка | Де записується | Що доводить | Міцність |
+|---|---|---|---|
+| Час останньої реальної перевірки/старту (`syncLastCheckAt`) | `chrome.storage.local` | Що в момент T стартував ручний або тихий синк (не записується при `fresh`, `paused`, `daily_limit`, `no_permission`, `never_synced`) | Середня (системний годинник; при зсуві годинника назад `elapsed < 0` трактується як застарілий і перевіряється) |
+| Лічильник добових перевірок і резерв 1 слоту (`syncChecks`) | `chrome.storage.local` | Що за локальну добу стартувало не більше `MAX_CHECKS_PER_DAY` перевірок, із них активність крамниць узяла щонайбільше `MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS` | Сильна (записується до запуску циклу під `checkInFlight`-блокуванням) |
+| In-memory throttle не-стартових спроб | Пам'ять service worker'а (`lastAttemptMs`, `lastAttemptCap`) | Що протягом 60 с у живому воркері повторний виклик із тим самим або жорсткішим лімітом не робить I/O; скидається на `startManual()` і `check()` | Сильна (лише оптимізація частоти перевірок; смерть воркера безпечно скидає throttle) |
+| Підсумок після ↻ (`No new check-ins.` / `Added N new check-ins.`) | DOM popup (`#syncStatus`) | Кількість нових чекінів `mergedThisRun`, змерджених останнім кроком синку | Сильна (читається безпосередньо зі стану завершеного кроку, показується лише після ручного запуску з цього popup) |
+
+## Рев'ю спеки
+
+| № | Перевірка | Рішення | Причина / що змінено |
+|---|---|---|---|
+| — | — | Очікує запуску `detent cross-review --spec` після оцінки власника | Спеку створено разом із фіксами рев'ю PR на гілці |

@@ -6,12 +6,13 @@ import { hadIndex, invalidateHadIndex } from '../local/had';
 import { feedPageOf } from '../../../src/shared/checkin-sync/scenarios';
 import { afterEach, beforeEach, describe, it, expect, vi, type Mock } from 'vitest';
 import {
+  checkOnInstalled, checkOnShopActivity,
   feedUrl, handleCacheSet, handleCacheSetMany, handleCacheSetIfMatching,
   handleCheckinSyncStart, handleCheckinSyncStatus, handleCheckinSyncStop, handleLocalDbClear, handleLocalDbStats, handleMatch,
   restoreSyncBadge, AWAITING_PERMISSION_KEY, handleAwaitingPermission, handleNotStarting, handleUntappdPermissionAdded,
 } from './index';
 import { setSettings } from '../shared/config';
-import { ACTIVITY_CHECK_COOLDOWN_MS, CHECK_ALARM, INTENT_KEY, LAST_CHECK_KEY, WATCHDOG_ALARM } from './sync-scheduler';
+import { ACTIVITY_CHECK_COOLDOWN_MS, CHECK_ALARM, CHECK_PERIOD_MINUTES, CHECKS_KEY, INTENT_KEY, LAST_CHECK_KEY, WATCHDOG_ALARM, localDate } from './sync-scheduler';
 import { getCached } from '../cache/store';
 import type { MatchResult } from '../api/types';
 import * as client from '../api/client';
@@ -914,7 +915,7 @@ describe('#934 scheduler wiring', () => {
     expect(localStore.has(INTENT_KEY)).toBe(false);
   });
 
-  it('onInstalled ensures the 6-hourly alarm and checks only when LAST_CHECK_KEY is absent or stale', async () => {
+  it('onInstalled ensures the 6-hourly alarm and checks when LAST_CHECK_KEY is absent or stale, skipping when fresh', async () => {
     permissionsContains.mockResolvedValue(true);
     vi.mocked(chrome.alarms.create).mockClear();
     alarmsGet.mockResolvedValueOnce(undefined);
@@ -930,13 +931,16 @@ describe('#934 scheduler wiring', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     fetchMock.mockClear();
-    alarmsGet.mockResolvedValueOnce({ name: CHECK_ALARM, scheduledTime: 0, periodInMinutes: 360, persistAcrossSessions: true });
-    onInstalled();
-    await new Promise((r) => setTimeout(r, 20));
+    expect(await checkOnInstalled()).toBe('fresh');
     expect(fetchMock).toHaveBeenCalledTimes(0);
+
+    localStore.set(LAST_CHECK_KEY, new Date(Date.now() - CHECK_PERIOD_MINUTES * 60_000 - 1000).toISOString());
+    expect(await checkOnInstalled()).toBe('started');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(localStore.has(INTENT_KEY)).toBe(false));
   });
 
-  it('shop activity (match and cache:get-many) triggers a silent check after cooldown and skips within cooldown', async () => {
+  it('shop activity (match and cache:get-many) triggers a silent check after cooldown, skips when fresh, and reserves 1 daily slot', async () => {
     permissionsContains.mockResolvedValue(true);
     const fetchMock = vi.fn(async () => new Response(FEED, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -958,7 +962,7 @@ describe('#934 scheduler wiring', () => {
       onMessage({ type: 'cache:get-many', keys: [] }, {}, resolve);
     });
     await cacheReply;
-    await new Promise((r) => setTimeout(r, 20));
+    expect(await checkOnShopActivity()).toBe('fresh');
     expect(fetchMock).toHaveBeenCalledTimes(0);
 
     localStore.set(LAST_CHECK_KEY, new Date(Date.now() - ACTIVITY_CHECK_COOLDOWN_MS - 1000).toISOString());
@@ -968,6 +972,12 @@ describe('#934 scheduler wiring', () => {
     await staleCacheReply;
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(localStore.has(INTENT_KEY)).toBe(false));
+
+    fetchMock.mockClear();
+    localStore.set(CHECKS_KEY, { date: localDate(new Date()), count: 3 });
+    localStore.set(LAST_CHECK_KEY, new Date(Date.now() - ACTIVITY_CHECK_COOLDOWN_MS - 1000).toISOString());
+    expect(await checkOnShopActivity()).toBe('daily_limit');
+    expect(fetchMock).toHaveBeenCalledTimes(0);
   });
 });
 
