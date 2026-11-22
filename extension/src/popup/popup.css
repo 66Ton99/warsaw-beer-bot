@@ -94,10 +94,30 @@ h1 {
    next to the bare count. No animation on top of exact numbers: it would be decoration. */
 .sync-widget { margin: 8px 0 0; }
 .card > .btn[hidden] { display: none; }
-.sync-widget[hidden], .sync-bar[hidden], .sync-widget a[hidden] { display: none; }
+.sync-widget[hidden], .sync-bar[hidden], .sync-widget a[hidden], .sync-recheck[hidden] { display: none; }
+.sync-head { display: flex; align-items: center; gap: 6px; }
+.sync-head:has(#syncLabel:empty):has(#syncRecheck[hidden]) { display: none; }
 .sync-label { margin: 0; font-size: 12px; font-weight: 600; color: var(--fg); }
 .sync-label:empty { display: none; }
 .sync-label.is-error { color: var(--danger); }
+.sync-recheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 24px;
+  min-block-size: 24px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.sync-recheck .ico { width: 13px; height: 13px; }
+.sync-recheck:hover:not(:disabled) { background: var(--surface-quiet); color: var(--fg); }
+.sync-recheck:active:not(:disabled) { background: var(--surface-quiet-hover); }
+.sync-recheck:disabled { color: var(--disabled-fg); cursor: default; }
 .sync-bar {
   height: 6px;
   margin: 5px 0 0;
@@ -111,6 +131,7 @@ h1 {
 .sync-detail a { color: var(--accent); }
 
 @media (prefers-reduced-motion: reduce) {
+  .sync-recheck,
   .shops-summary,
   .shops-chevron,
   .shop-link { transition: none; }

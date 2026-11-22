@@ -22,7 +22,7 @@ describe('canRefresh', () => {
 const base: SyncStatusView = { running: false, serverCount: 0, profileTotal: null, mergedThisRun: 0, outcome: null,
   complete: false, caughtUp: false, gapMissing: null, pausedUntil: null, quiet: false, username: null };
 const NOW = new Date('2026-11-01T12:00:00.000Z');
-const none = { bar: null, detail: null, action: null, link: null, tone: 'neutral' };
+const none = { bar: null, detail: null, action: null, recheck: false, link: null, tone: 'neutral' };
 const untappd = { text: 'Open untappd.com', href: 'https://untappd.com/' };
 const N = '\u202f';
 
@@ -60,9 +60,9 @@ describe('syncWidgetView', () => {
     expect(syncWidgetView({ ...base, running: true, serverCount: 5210 }, NOW)).toEqual({ ...none,
       label: 'Syncing…', bar: 'unknown', detail: `5${N}210 check-ins`, action: { kind: 'stop', label: 'Stop' } });
   });
-  it('done and caught up: the tick, a full bar, no action', () => {
+  it('done and caught up: the tick, a full bar, recheck button and no primary action', () => {
     expect(syncWidgetView({ ...base, outcome: 'done', serverCount: 12407, profileTotal: 12407, caughtUp: true }, NOW)).toEqual({ ...none,
-      label: '✓ Fully synced', bar: 100, detail: `12${N}407 check-ins` });
+      label: '✓ Fully synced', bar: 100, detail: `12${N}407 check-ins`, recheck: true });
   });
   // The requirement of #934: equal counts are not a proven history.
   it('done with equal counts but not caught up: 100 %, Synced N of N and Sync again, never the tick', () => {
@@ -399,12 +399,55 @@ describe('initPopup', () => {
     expect((document.getElementById('syncCheckins') as HTMLButtonElement).hidden).toBe(false);
   });
 
-  it('with a token: a fully synced reply hides the sync button (#934)', async () => {
+  it('with a token: a fully synced reply hides the sync button and shows the compact recheck button', async () => {
     const reply = { type: 'checkin-sync:status:ok', running: false, serverCount: 100, profileTotal: 100, mergedThisRun: 0,
       outcome: 'done', complete: true, caughtUp: true, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' };
     await bootPopup('tok', reply);
     expect(document.getElementById('syncLabel')?.textContent).toBe('✓ Fully synced');
     expect((document.getElementById('syncCheckins') as HTMLButtonElement).hidden).toBe(true);
+    const recheckBtn = document.getElementById('syncRecheck') as HTMLButtonElement;
+    expect(recheckBtn.hidden).toBe(false);
+    expect(recheckBtn.getAttribute('aria-label')).toBe('Check for new check-ins');
+  });
+
+  it('clicking the compact recheck button requests permission and starts sync', async () => {
+    const reply = { type: 'checkin-sync:status:ok', running: false, serverCount: 100, profileTotal: 100, mergedThisRun: 0,
+      outcome: 'done', complete: true, caughtUp: true, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' };
+    await bootPopup('', reply);
+    const chromeStub = globalThis.chrome as unknown as { runtime: Record<string, unknown>; permissions: { request: Mock } };
+    const send = vi.fn((_m: { type?: string }, callback?: (r?: object) => void) => { callback?.(reply); });
+    chromeStub.runtime.sendMessage = send;
+    const recheckBtn = document.getElementById('syncRecheck') as HTMLButtonElement;
+    recheckBtn.click();
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'checkin-sync:start' }, expect.any(Function)));
+    expect(send.mock.calls[0][0]).toEqual({ type: 'checkin-sync:awaiting-permission' });
+    expect(send.mock.invocationCallOrder[0]).toBeLessThan(chromeStub.permissions.request.mock.invocationCallOrder[0]);
+  });
+
+  it('declining permission from the compact recheck button withdraws the press and re-enables the button', async () => {
+    const reply = { type: 'checkin-sync:status:ok', running: false, serverCount: 100, profileTotal: 100, mergedThisRun: 0,
+      outcome: 'done', complete: true, caughtUp: true, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' };
+    await bootPopup('', reply);
+    const chromeStub = globalThis.chrome as unknown as { runtime: Record<string, unknown>; permissions: { request: Mock } };
+    chromeStub.permissions.request.mockResolvedValue(false);
+    const send = vi.fn((_m: { type?: string }, callback?: (r?: object) => void) => { callback?.(); });
+    chromeStub.runtime.sendMessage = send;
+    const recheckBtn = document.getElementById('syncRecheck') as HTMLButtonElement;
+    recheckBtn.click();
+    await vi.waitFor(() => expect(document.getElementById('syncStatus')?.textContent)
+      .toBe('Allow access to untappd.com to sync your check-ins.'));
+    expect(send.mock.calls.map(([m]) => m.type)).toEqual(['checkin-sync:awaiting-permission', 'checkin-sync:not-starting']);
+    expect(recheckBtn.disabled).toBe(false);
+  });
+
+  it('hides the compact recheck button while running or on a gap', async () => {
+    await bootPopup('tok', { type: 'checkin-sync:status:ok', running: true, serverCount: 50, profileTotal: 100, mergedThisRun: 0,
+      outcome: null, complete: false, caughtUp: false, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' });
+    expect((document.getElementById('syncRecheck') as HTMLButtonElement).hidden).toBe(true);
+
+    await bootPopup('tok', { type: 'checkin-sync:status:ok', running: false, serverCount: 88, profileTotal: 100, mergedThisRun: 0,
+      outcome: 'gap', complete: false, caughtUp: false, gapMissing: 12, pausedUntil: null, quiet: false, username: 'bob' });
+    expect((document.getElementById('syncRecheck') as HTMLButtonElement).hidden).toBe(true);
   });
 
   it('with a token: sync is primary and its status is polled', async () => {
