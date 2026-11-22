@@ -641,7 +641,8 @@ describe('checkIfStale and LAST_CHECK_KEY', () => {
     expect(await Promise.all([p1, p2])).toEqual(['paused', 'paused']);
 
     let releaseReservedPerm!: (v: boolean) => void;
-    const hasReservedPerm = vi.fn(() => new Promise<boolean>((resolve) => { releaseReservedPerm = resolve; }));
+    const hasReservedPerm = vi.fn(async () => true)
+      .mockImplementationOnce(() => new Promise<boolean>((resolve) => { releaseReservedPerm = resolve; }));
     const t3 = setup({
       hasUntappdPermission: hasReservedPerm,
       runStep: async () => outcome('done'),
