@@ -85,6 +85,7 @@ describe('renderDocs (real repo files)', () => {
     'Piwne Mosty',
     'Funkyshop',
     'Beershop',
+    'Extra Magazin',
   ];
 
   it('renders all four targets without throwing', () => {

@@ -9,8 +9,21 @@ import { flasker } from './flasker';
 import { piwnemosty } from './piwnemosty';
 import { funkyshop } from './funkyshop';
 import { beershop } from './beershop';
+import { extramagazin } from './extramagazin';
 
-export const ADAPTERS: SiteAdapter[] = [beerrepublic, onemorebeer, beerfreak, bierloods22, winetime, hoptimaal, flasker, piwnemosty, funkyshop, beershop];
+export const ADAPTERS: SiteAdapter[] = [
+  beerrepublic,
+  onemorebeer,
+  beerfreak,
+  bierloods22,
+  winetime,
+  hoptimaal,
+  flasker,
+  piwnemosty,
+  funkyshop,
+  beershop,
+  extramagazin,
+];
 
 export function pickAdapter(url: URL): SiteAdapter | null {
   return ADAPTERS.find((a) => a.hostMatch(url)) ?? null;
