@@ -640,5 +640,20 @@ describe('checkIfStale and LAST_CHECK_KEY', () => {
     const p2 = t2.scheduler.check();
     releasePausePerm(true);
     expect(await Promise.all([p1, p2])).toEqual(['paused', 'paused']);
+
+    let releaseReservedPerm!: (v: boolean) => void;
+    const t3 = setup({
+      hasUntappdPermission: () => new Promise<boolean>((resolve) => { releaseReservedPerm = resolve; }),
+      runStep: async () => outcome('done'),
+    }, memoryStore({
+      [CHECKS_KEY]: { date: '2026-11-22', count: MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS },
+    }));
+    t3.setNow(new Date(2026, 10, 22, 18, 0, 0));
+    const activityCheck = t3.scheduler.checkIfStale(60 * 60_000, { reserveForAlarm: true });
+    const alarmCheck = t3.scheduler.check();
+    releaseReservedPerm(true);
+    expect(await Promise.all([activityCheck, alarmCheck])).toEqual(['daily_limit', 'started']);
+    await t3.scheduler.idle();
+    expect(t3.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: MAX_CHECKS_PER_DAY });
   });
 });

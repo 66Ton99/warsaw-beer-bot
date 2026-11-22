@@ -107,7 +107,7 @@ function emptyOutcome(status: SyncOutcome['status']): SyncOutcome {
 
 export function createSyncScheduler(deps: SchedulerDeps) {
   let loopPromise: Promise<void> | null = null;
-  let checkInFlight: Promise<CheckResult> | null = null;
+  let checkInFlight: { promise: Promise<CheckResult>; maxChecks: number } | null = null;
   let lastAttemptMs: number | null = null;
   let lastAttemptCap: number | null = null;
   let controller: AbortController | null = null;
@@ -234,8 +234,11 @@ export function createSyncScheduler(deps: SchedulerDeps) {
 
   async function runCheck(maxChecks: number): Promise<CheckResult> {
     if (checkInFlight) {
-      const res = await checkInFlight;
-      return res === 'started' ? 'running' : res;
+      const { promise, maxChecks: activeMax } = checkInFlight;
+      const res = await promise;
+      if (res === 'started') return 'running';
+      if (maxChecks <= activeMax) return res;
+      return runCheck(maxChecks);
     }
     const run = (async (): Promise<CheckResult> => {
       // Never asks for the permission itself: only uses one the person gave.
@@ -264,11 +267,12 @@ export function createSyncScheduler(deps: SchedulerDeps) {
       void loop();
       return 'started';
     })();
-    checkInFlight = run;
+    const entry = { promise: run, maxChecks };
+    checkInFlight = entry;
     try {
       return await run;
     } finally {
-      if (checkInFlight === run) checkInFlight = null;
+      if (checkInFlight === entry) checkInFlight = null;
     }
   }
 
@@ -279,12 +283,14 @@ export function createSyncScheduler(deps: SchedulerDeps) {
   };
 
   async function checkIfStale(minAgeMs = CHECK_PERIOD_MINUTES * 60_000, opts?: StaleCheckOptions): Promise<StaleCheckResult> {
+    const maxChecks = opts?.reserveForAlarm ? Math.max(0, MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS) : MAX_CHECKS_PER_DAY;
     if (checkInFlight) {
-      const res = await checkInFlight;
-      return res === 'started' ? 'running' : res;
+      const { promise, maxChecks: activeMax } = checkInFlight;
+      const res = await promise;
+      if (res === 'started') return 'running';
+      if (maxChecks <= activeMax) return res;
     }
     if (loopPromise) return 'running';
-    const maxChecks = opts?.reserveForAlarm ? Math.max(0, MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS) : MAX_CHECKS_PER_DAY;
     if (lastAttemptMs !== null && lastAttemptCap !== null && maxChecks <= lastAttemptCap) {
       const since = deps.now().getTime() - lastAttemptMs;
       if (since >= 0 && since < ATTEMPT_THROTTLE_MS) return 'throttled';
