@@ -14,6 +14,9 @@ shop pages. The supported shops, grouped by where they ship from, are:
   at `beershop.pl`, `beershop.cz`, `beershop.sk`, `beershop.eu`, and `beershop.de`;
   the extension checks the beer name against the product address so a trailing
   style label is not mistaken for part of the name
+- **Spain:** [Extra Magazin](https://extramagazin.es/) — localized storefronts for
+  Spanish (`/`), Ukrainian (`/uk/`), Polish (`/pl/`), Catalan (`/ca/`), Russian (`/ru/`),
+  and Romanian (`/ro/`) (beer, cider, and kvass sections)
 
 To get everything working you need three things: (1) upload your beer
 history to the bot, (2) get an access token, (3) install and configure the
@@ -287,7 +290,7 @@ housekeeping one at the bottom:
 <figure class="popup-screenshot">
   <img src="../assets/popup-supported-shops-collapsed.png"
        alt="Extension popup with the Supported shops row collapsed"
-       width="284" height="233" loading="lazy">
+       width="284" height="268" loading="lazy">
   <figcaption>The shop directory stays compact until you need it.</figcaption>
 </figure>
 
@@ -315,10 +318,10 @@ housekeeping one at the bottom:
   be rechecked.` when it did. On a page the extension doesn't support, the
   button is **greyed out and inactive**, with that same caption explaining why
   — and clearing the cache no longer wipes that explanation away.
-- **"Supported shops · 10"** — click this row to expand or collapse the shop
+- **"Supported shops · 11"** — click this row to expand or collapse the shop
   directory. Shops are grouped by the country they ship from. Select any shop
   to open it in a new tab of the current browser window; Ctrl-click (Cmd on a Mac) opens it in a
-  background tab and Shift-click in a new window, as with any link. Beershop appears once and chooses
+  background tab and Shift-click in a new window, as with any link. Beershop and Extra Magazin each appear once and choose
   the storefront that best matches your browser languages.
 - **"Clear all cache"** (the quiet button at the bottom, under a thin rule —
   once a token is saved, the "Read the setup guide →" link sits just above it)
@@ -330,7 +333,7 @@ housekeeping one at the bottom:
 <figure class="popup-screenshot">
   <img src="../assets/popup-supported-shops-expanded.png"
        alt="Expanded Supported shops directory grouped by shipping country"
-       width="284" height="519" loading="lazy">
+       width="284" height="554" loading="lazy">
   <figcaption>The expanded directory is grouped by shipping origin; scroll the list to see every shop.</figcaption>
 </figure>
 

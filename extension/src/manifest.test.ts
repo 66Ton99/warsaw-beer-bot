@@ -35,6 +35,8 @@ describe('manifest (both variants)', () => {
       expect(cs.matches).toContain(`https://${host}/*`);
       expect(cs.matches).toContain(`https://*.${host}/*`);
     }
+    expect(cs.matches).toContain('https://extramagazin.es/*');
+    expect(cs.matches).toContain('https://*.extramagazin.es/*');
   });
 
   it('exposes a popup action with a default icon', () => {

@@ -22,6 +22,7 @@ describe('supportedShopGroups', () => {
       ['Poland', ['OneMoreBeer', 'Piwne Mosty', 'Funkyshop']],
       ['The Netherlands', ['Beer Republic', 'Bierloods22', 'Hoptimaal']],
       ['Czechia', ['Beershop']],
+      ['Spain', ['Extra Magazin']],
     ]);
     expect(groups.flatMap(({ shops }) => shops.map(({ id }) => id)).sort())
       .toEqual(ADAPTERS.map(({ id }) => id).sort());
@@ -42,6 +43,18 @@ describe('supportedShopGroups', () => {
       expect(beershop?.url).toBe('https://beershop.eu/');
     }
   });
+
+  it('picks localized Extra Magazin storefronts for Ukrainian, Polish, and fallback languages', () => {
+    const shopUrlFor = (languages: string[]) =>
+      supportedShopGroups(languages)
+        .flatMap(({ shops }) => shops)
+        .find(({ id }) => id === 'extramagazin')?.url;
+
+    expect(shopUrlFor(['uk-UA', 'en-US'])).toBe('https://extramagazin.es/uk/');
+    expect(shopUrlFor(['de-DE', 'pl-PL'])).toBe('https://extramagazin.es/pl/');
+    expect(shopUrlFor(['en-GB'])).toBe('https://extramagazin.es/');
+    expect(shopUrlFor(['es-ES'])).toBe('https://extramagazin.es/');
+  });
 });
 
 describe('renderSupportedShops', () => {
@@ -56,9 +69,10 @@ describe('renderSupportedShops', () => {
       'Poland',
       'The Netherlands',
       'Czechia',
+      'Spain',
     ]);
-    expect(container.querySelectorAll<HTMLAnchorElement>('.shop-link')).toHaveLength(10);
-    expect(count).toBe(10);
+    expect(container.querySelectorAll<HTMLAnchorElement>('.shop-link')).toHaveLength(ADAPTERS.length);
+    expect(count).toBe(ADAPTERS.length);
     const flasker = Array.from(container.querySelectorAll<HTMLAnchorElement>('.shop-link'))
       .find((link) => link.textContent?.includes('Flasker'))!;
 

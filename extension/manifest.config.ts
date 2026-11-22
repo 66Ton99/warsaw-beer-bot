@@ -43,6 +43,8 @@ const SHOP_MATCHES = [
   'https://*.beershop.eu/*',
   'https://beershop.de/*',
   'https://*.beershop.de/*',
+  'https://extramagazin.es/*',
+  'https://*.extramagazin.es/*',
 ];
 
 // Enrichment + check-in sync reach Untappd and its Algolia search from the user's session.

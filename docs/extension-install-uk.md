@@ -15,6 +15,9 @@ Untappd. Підтримувані магазини згруповано за к�
   `beershop.pl`, `beershop.cz`, `beershop.sk`, `beershop.eu` і `beershop.de`;
   назву пива розширення звіряє з адресою товару, щоб не приймати дописаний стиль
   за частину назви
+- **Іспанія:** [Extra Magazin](https://extramagazin.es/uk/) — мовні версії для
+  української (`/uk/`), польської (`/pl/`), іспанської (`/`), каталонської (`/ca/`),
+  російської (`/ru/`) та румунської (`/ro/`) (розділи пива, сидру та квасу)
 
 Щоб усе запрацювало, потрібні три речі: (1) завантажити свою історію пив у бота,
 (2) отримати токен доступу, (3) встановити й налаштувати розширення. Нижче — по кроках.
@@ -278,7 +281,7 @@ https://chromewebstore.google.com/detail/fdelmnhijeiojadcaihfdpecfcldbndg
 <figure class="popup-screenshot">
   <img src="../assets/popup-supported-shops-collapsed.png"
        alt="Popup розширення зі згорнутим рядком Supported shops"
-       width="284" height="233" loading="lazy">
+       width="284" height="268" loading="lazy">
   <figcaption>Каталог магазинів лишається компактним, доки він не потрібен.</figcaption>
 </figure>
 
@@ -304,11 +307,11 @@ https://chromewebstore.google.com/detail/fdelmnhijeiojadcaihfdpecfcldbndg
   rechecked.`. На сторінці, яку розширення не підтримує, кнопка **сіра й неактивна**,
   а той самий підпис пояснює чому — і це пояснення більше не зникає, якщо потім
   натиснути «Clear all cache».
-- **«Supported shops · 10»** — натисни цей рядок, щоб розгорнути або згорнути
+- **«Supported shops · 11»** — натисни цей рядок, щоб розгорнути або згорнути
   каталог. Магазини згруповано за країною відправлення. Натисни магазин, щоб
   відкрити його в новій вкладці поточного вікна браузера; Ctrl-клік (Cmd на Mac) відкриває
-  магазин у фоновій вкладці, а Shift-клік — у новому вікні, як звичайне посилання. Beershop показано один раз, а його адреса
-  обирається за найкращою сумісністю з мовами браузера.
+  магазин у фоновій вкладці, а Shift-клік — у новому вікні, як звичайне посилання. Beershop та Extra Magazin показано по одному разу, а їхні адреси
+  обираються за найкращою сумісністю з мовами браузера.
 - **«Clear all cache»** (сіра кнопка внизу, під тонкою лінією — якщо токен
   збережено, одразу над нею йде посилання «Read the setup guide →») —
   чистить **увесь** локальний кеш накладки (усі сайти). Просить підтвердження: перший клік показує,
@@ -319,7 +322,7 @@ https://chromewebstore.google.com/detail/fdelmnhijeiojadcaihfdpecfcldbndg
 <figure class="popup-screenshot">
   <img src="../assets/popup-supported-shops-expanded.png"
        alt="Розгорнутий каталог Supported shops, згрупований за країною відправлення"
-       width="284" height="519" loading="lazy">
+       width="284" height="554" loading="lazy">
   <figcaption>Розгорнутий каталог згруповано за країною відправлення; прокрути список, щоб побачити всі магазини.</figcaption>
 </figure>
 
