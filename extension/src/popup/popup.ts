@@ -60,8 +60,9 @@ function checkins(n: number): string {
   return n === 1 ? '1 check-in' : `${count(n)} check-ins`;
 }
 
-export function recheckFeedbackText(mergedThisRun: number): string {
-  return mergedThisRun <= 0 ? 'No new check-ins.' : 'Check-ins updated.';
+export function recheckFeedbackText(updated: boolean | number): string {
+  const hasUpdates = typeof updated === 'boolean' ? updated : updated > 0;
+  return hasUpdates ? 'Check-ins updated.' : 'No new check-ins.';
 }
 
 /** #934 §6: one label, one bar, one action per sync state. */
@@ -331,19 +332,20 @@ async function initPopup(): Promise<void> {
     && widgetNodes.detail && widgetNodes.link) {
     const nodes = widgetNodes as SyncWidgetNodes;
     widget.hidden = false;
+    let latestStatus: SyncStatusView | null = null;
     let latestView: SyncWidgetView | null = null;
     let pendingRecheckFeedback = false;
-    let recheckSawMerged = false;
+    let recheckBaseCount: number | null = null;
     let returnFocusToSync = false;
     const render = (s: SyncStatusView) => {
+      latestStatus = s;
       latestView = syncWidgetView({ ...s, mode }, new Date());
       if (pendingRecheckFeedback) {
-        if (s.mergedThisRun > 0) recheckSawMerged = true;
         if (!s.running) {
           pendingRecheckFeedback = false;
-          const anyMerged = recheckSawMerged;
-          recheckSawMerged = false;
-          syncStatus.textContent = s.outcome === 'done' && s.caughtUp ? recheckFeedbackText(anyMerged ? 1 : 0) : '';
+          const countIncreased = recheckBaseCount !== null && s.serverCount > recheckBaseCount;
+          recheckBaseCount = null;
+          syncStatus.textContent = s.outcome === 'done' && s.caughtUp ? recheckFeedbackText(countIncreased) : '';
         } else {
           syncStatus.textContent = '';
         }
@@ -361,6 +363,9 @@ async function initPopup(): Promise<void> {
     const poll = () => {
       chrome.runtime.sendMessage({ type: 'checkin-sync:status' }, (s?: SyncStatusView) => {
         if (chrome.runtime.lastError || !s) {
+          pendingRecheckFeedback = false;
+          recheckBaseCount = null;
+          latestStatus = null;
           latestView = null;
           renderSyncWidget(nodes, syncWidgetView({ running: false, serverCount: 0, profileTotal: null, mergedThisRun: 0,
             outcome: null, complete: false, caughtUp: false, gapMissing: null, pausedUntil: null, quiet: false, username: null }, new Date()));
@@ -375,9 +380,14 @@ async function initPopup(): Promise<void> {
       syncBtn.disabled = disabled;
       if (recheckBtn) recheckBtn.disabled = disabled;
     };
-    const triggerSync = async (clearFirst: boolean) => {
-      pendingRecheckFeedback = !clearFirst;
-      recheckSawMerged = false;
+    const triggerSync = async (clearFirst: boolean, isRecheck = false) => {
+      if (isRecheck) {
+        pendingRecheckFeedback = true;
+        recheckBaseCount = latestStatus?.serverCount ?? null;
+      } else {
+        pendingRecheckFeedback = false;
+        recheckBaseCount = null;
+      }
       returnFocusToSync = document.activeElement === syncBtn || document.activeElement === recheckBtn;
       setSyncButtonsDisabled(true);
       syncStatus.textContent = clearFirst ? 'Clearing…' : 'Starting…';
@@ -392,7 +402,7 @@ async function initPopup(): Promise<void> {
       const granted = await chrome.permissions.request({ origins: ['https://untappd.com/*'] });
       if (!granted) {
         pendingRecheckFeedback = false;
-        recheckSawMerged = false;
+        recheckBaseCount = null;
         returnFocusToSync = false;
         chrome.runtime.sendMessage({ type: 'checkin-sync:not-starting' }, () => { void chrome.runtime.lastError; });
         syncStatus.textContent = 'Allow access to untappd.com to sync your check-ins.';
@@ -409,7 +419,7 @@ async function initPopup(): Promise<void> {
         });
         if (!cleared) {
           pendingRecheckFeedback = false;
-          recheckSawMerged = false;
+          recheckBaseCount = null;
           returnFocusToSync = false;
           syncStatus.textContent = 'Could not clear the check-ins stored in this browser.';
           setSyncButtonsDisabled(false);
@@ -428,15 +438,16 @@ async function initPopup(): Promise<void> {
     syncBtn.addEventListener('click', () => {
       if (latestView?.action?.kind === 'stop') {
         pendingRecheckFeedback = false;
+        recheckBaseCount = null;
         setSyncButtonsDisabled(true);
         syncStatus.textContent = 'Stopping…';
         chrome.runtime.sendMessage({ type: 'checkin-sync:stop' }, () => { void chrome.runtime.lastError; });
         return;
       }
-      void triggerSync(latestView?.action?.kind === 'clear');
+      void triggerSync(latestView?.action?.kind === 'clear', false);
     });
     recheckBtn?.addEventListener('click', () => {
-      void triggerSync(false);
+      void triggerSync(false, true);
     });
     poll(); // reflect an in-progress run when the popup (re)opens
   }

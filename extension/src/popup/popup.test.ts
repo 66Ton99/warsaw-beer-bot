@@ -43,9 +43,12 @@ describe('syncPercent', () => {
 });
 
 describe('recheckFeedbackText', () => {
-  it('formats zero and positive merged check-in states without claiming a multi-step total', () => {
+  it('formats zero, negative, and positive merged check-in states, and boolean flags', () => {
     expect(recheckFeedbackText(0)).toBe('No new check-ins.');
+    expect(recheckFeedbackText(-1)).toBe('No new check-ins.');
+    expect(recheckFeedbackText(false)).toBe('No new check-ins.');
     expect(recheckFeedbackText(1)).toBe('Check-ins updated.');
+    expect(recheckFeedbackText(true)).toBe('Check-ins updated.');
     expect(recheckFeedbackText(1205)).toBe('Check-ins updated.');
   });
 });
@@ -484,7 +487,7 @@ describe('initPopup', () => {
     expect(recheckBtn.disabled).toBe(false);
   });
 
-  it('shows No new check-ins. or Added N new check-ins. after clicking #syncRecheck, while ordinary open stays empty', async () => {
+  it('shows No new check-ins. or Check-ins updated. after clicking #syncRecheck, while ordinary open stays empty', async () => {
     const caughtUpReply = { type: 'checkin-sync:status:ok', running: false, serverCount: 100, profileTotal: 100, mergedThisRun: 0,
       outcome: 'done', complete: true, caughtUp: true, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' };
     await bootPopup('tok', caughtUpReply);
@@ -503,6 +506,44 @@ describe('initPopup', () => {
     statusReply = { ...caughtUpReply, serverCount: 125, profileTotal: 125, mergedThisRun: 25 };
     recheckBtn.click();
     await vi.waitFor(() => expect(document.getElementById('syncStatus')?.textContent).toBe('Check-ins updated.'));
+  });
+
+  it('shows Check-ins updated. when check-ins are added in a step that completes entirely between status polls', async () => {
+    const caughtUpReply = { type: 'checkin-sync:status:ok', running: false, serverCount: 100, profileTotal: 100, mergedThisRun: 0,
+      outcome: 'done', complete: true, caughtUp: true, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' };
+    await bootPopup('tok', caughtUpReply);
+    expect(document.getElementById('syncStatus')?.textContent).toBe('');
+
+    const chromeStub = globalThis.chrome as unknown as { runtime: Record<string, unknown> };
+    // The positive step ran entirely between polls: popup never observes a poll with running: true or mergedThisRun > 0.
+    // The very next poll sees running: false, serverCount increased from 100 to 110, and mergedThisRun: 0.
+    const completedBetweenPollsReply = { ...caughtUpReply, running: false, serverCount: 110, profileTotal: 110, mergedThisRun: 0 };
+    chromeStub.runtime.sendMessage = vi.fn((m: { type?: string }, callback?: (r?: object) => void) => {
+      callback?.(m.type === 'checkin-sync:status' ? completedBetweenPollsReply : { type: 'checkin-sync:started', alreadyRunning: false });
+    });
+
+    const recheckBtn = document.getElementById('syncRecheck') as HTMLButtonElement;
+    recheckBtn.click();
+    await vi.waitFor(() => expect(document.getElementById('syncStatus')?.textContent).toBe('Check-ins updated.'));
+  });
+
+  it('does not show summary after regular sync button click finishes into Fully synced', async () => {
+    const syncedReply = { type: 'checkin-sync:status:ok', running: false, serverCount: 80, profileTotal: 100, mergedThisRun: 0,
+      outcome: 'done', complete: false, caughtUp: false, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' };
+    await bootPopup('tok', syncedReply);
+    const syncBtn = document.getElementById('syncCheckins') as HTMLButtonElement;
+    expect(syncBtn.hidden).toBe(false);
+
+    const chromeStub = globalThis.chrome as unknown as { runtime: Record<string, unknown> };
+    const finishedReply = { type: 'checkin-sync:status:ok', running: false, serverCount: 100, profileTotal: 100, mergedThisRun: 20,
+      outcome: 'done', complete: true, caughtUp: true, gapMissing: null, pausedUntil: null, quiet: false, username: 'bob' };
+    chromeStub.runtime.sendMessage = vi.fn((m: { type?: string }, callback?: (r?: object) => void) => {
+      callback?.(m.type === 'checkin-sync:status' ? finishedReply : { type: 'checkin-sync:started', alreadyRunning: false });
+    });
+
+    syncBtn.click();
+    await vi.waitFor(() => expect(document.getElementById('syncLabel')?.textContent).toBe('✓ Fully synced'));
+    expect(document.getElementById('syncStatus')?.textContent).toBe('');
   });
 
   it('shows Check-ins updated. even when a multi-step recheck finishes with mergedThisRun 0 on the final step, and keeps focus across click', async () => {
