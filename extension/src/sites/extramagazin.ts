@@ -447,14 +447,36 @@ function cleanBeerName(
   return name;
 }
 
+// The Latin letters and digits normalizeKey() keeps, as one space-separated string.
+function foldLatin(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 function finalizeGenericName(name: string, isAlcoholFree: boolean): string {
   let finalName = name;
 
-  // Client normalizeKey() strips Cyrillic; keep a letter-only Latin transliteration in
-  // parentheses so Cyrillic-only names never collide in cache while server stripSearchNoise() drops it.
-  if (finalName && /\p{Script=Cyrillic}/u.test(finalName) && !/[a-z]/i.test(finalName)) {
-    const latin = transliterateCyrillic(finalName);
-    if (latin && /[a-z]/i.test(latin)) {
+  // Client normalizeKey() strips Cyrillic; keep a Latin transliteration in parentheses so names
+  // that differ only in Cyrillic never collide in cache, while server stripSearchNoise() drops it.
+  // A Cyrillic-only name is transliterated whole; a mixed one ("Білий IPA") gets its Cyrillic words
+  // transliterated unless that exact Latin form is already in the name (curated overrides such as
+  // "Корифей (Koryfei)"). Either way the key carries the Latin form of every Cyrillic word.
+  if (finalName && /\p{Script=Cyrillic}/u.test(finalName)) {
+    const cyrillicOnly = !/[a-z]/i.test(finalName);
+    const source = cyrillicOnly
+      ? finalName
+      : finalName
+          .split(/\s+/)
+          .filter((word) => /\p{Script=Cyrillic}/u.test(word))
+          .join(' ');
+    // Brackets and quotes of the source words ("(Старый", "«Корифей»") stay out of the Latin form.
+    const latin = transliterateCyrillic(source.replace(/[^\p{L}\p{N}\s'-]+/gu, ' '));
+    const alreadyPresent = !cyrillicOnly && foldLatin(finalName).includes(foldLatin(latin));
+    if (latin && /[a-z]/i.test(latin) && !alreadyPresent) {
       finalName = `${finalName} (${latin})`;
     }
   }
@@ -485,21 +507,23 @@ function resolveGenericIdentity(
   let name = cleanedName;
   const rawLower = parsedBrewery.toLocaleLowerCase('uk-UA');
 
+  // Each rewrite is pinned to the ABV of the release its Untappd bid proves; a card with another
+  // ABV (alcohol-free or a new variant) goes through generic matching instead.
   if (rawLower === 'kozel') {
-    if (/^(?:kozel\s+)?(?:чорне|черное|negro|ciemne|neagr[aă])$/iu.test(cleanedName)) {
+    if (abv === 3.8 && /^(?:kozel\s+)?(?:чорне|черное|negro|ciemne|neagr[aă])$/iu.test(cleanedName)) {
       brewery = 'Pivovar Velké Popovice';
       name = 'Kozel Černý / Dark';
-    } else if (/^(?:kozel\s+)?(?:світле|светлое|claro|clara|jasne|blond[aă])$/iu.test(cleanedName)) {
+    } else if (abv === 4.6 && /^(?:kozel\s+)?(?:світле|светлое|claro|clara|jasne|blond[aă])$/iu.test(cleanedName)) {
       brewery = 'Pivovar Velké Popovice';
       name = 'Kozel Premium Lager / Kozel 11';
     }
-  } else if (rawLower === 'lvivske' && /^(?:(?:lvivske|львівське)\s+)?(?:світле|светлое|svitle|svitlo|clara|claro|jasne|blond[aă])$/iu.test(cleanedName)) {
+  } else if (rawLower === 'lvivske' && abv === 3.7 && /^(?:(?:lvivske|львівське)\s+)?(?:світле|светлое|svitle|svitlo|clara|claro|jasne|blond[aă])$/iu.test(cleanedName)) {
     brewery = 'Carlsberg Ukraine';
     name = 'Lvivske Blonde';
-  } else if (rawLower === 'tyskie' && /^browary\s+ksiazece$/iu.test(cleanedName)) {
+  } else if (rawLower === 'tyskie' && abv === 5.5 && /^browary\s+ksiazece$/iu.test(cleanedName)) {
     brewery = 'Tyskie Browary Książęce';
     name = 'Tyskie Gronie';
-  } else if (rawLower === 'zywiec' && /^namyslow$/iu.test(cleanedName)) {
+  } else if (rawLower === 'zywiec' && abv === 5.8 && /^namyslow$/iu.test(cleanedName)) {
     brewery = 'Browar Namysłów';
     name = 'Namysłów Pils';
   }
@@ -546,7 +570,14 @@ export const extramagazin: SiteAdapter = {
 
       const abv = parseAbv(rawTitle);
       const override = NORMALIZED_SLUG_OVERRIDES[productKey(href)];
-      const { brewery, name } = override ?? resolveGenericIdentity(el, rawTitle, abv);
+      // Overrides go through the same finalizer as generic names, so an alcohol-free override keeps
+      // its 0.0% and a Cyrillic-only one its Latin form in the normalizeKey cache key.
+      const { brewery, name } = override
+        ? {
+            brewery: override.brewery,
+            name: finalizeGenericName(override.name, abv === 0 || NA_DESCRIPTOR_RE.test(rawTitle)),
+          }
+        : resolveGenericIdentity(el, rawTitle, abv);
       if (!name) {
         cards.push({ el, brewery, name: rawTitle, skip: true, skipReason: 'unparsed' });
         continue;
