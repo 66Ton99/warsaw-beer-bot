@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { CheckinSyncPageResult } from '../api/types';
 import type { SyncOutcome } from './handle-checkin-sync';
 import {
-  ACTIVITY_RESERVED_SLOTS, ATTEMPT_THROTTLE_MS, CHECKS_KEY, INTENT_KEY, LAST_CHECK_KEY, MAX_CHECKS_PER_DAY,
+  ATTEMPT_THROTTLE_MS, CHECKS_KEY, INTENT_KEY, LAST_CHECK_KEY, MAX_CHECKS_PER_DAY,
   PAUSE_KEY, SILENT_BUDGET, WATCHDOG_ALARM,
   createSyncScheduler, localDate, nextLocalMidnight, pagesNeeded,
   type SchedulerDeps, type SchedulerReport, type StepRequest, type SyncIntent,
@@ -551,21 +551,20 @@ describe('checkIfStale and LAST_CHECK_KEY', () => {
     expect(await tLoop.scheduler.checkIfStale(60 * 60_000)).toBe('running');
   });
 
-  it('reserveForAlarm stops at MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS while check() uses the reserved slot', async () => {
+  it('reserveForAlarm stops at 3 checks a day while check() still uses the 4th, reserved slot', async () => {
     const t = setup();
-    const limit = MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS;
-    for (let i = 0; i < limit; i++) {
+    for (let i = 0; i < 3; i++) {
       t.setNow(new Date(2026, 10, 22, 10 + i * 2, 0, 0));
       expect(await t.scheduler.checkIfStale(60 * 60_000, { reserveForAlarm: true })).toBe('started');
       await t.scheduler.idle();
     }
     t.setNow(new Date(2026, 10, 22, 18, 0, 0));
     expect(await t.scheduler.checkIfStale(60 * 60_000, { reserveForAlarm: true })).toBe('daily_limit');
-    expect(t.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: limit });
+    expect(t.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: 3 });
 
     expect(await t.scheduler.check()).toBe('started');
     await t.scheduler.idle();
-    expect(t.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: MAX_CHECKS_PER_DAY });
+    expect(t.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: 4 });
   });
 
   it('throttles repeated non-starting checks (daily_limit and paused) without I/O until ATTEMPT_THROTTLE_MS or startManual()', async () => {
@@ -647,7 +646,7 @@ describe('checkIfStale and LAST_CHECK_KEY', () => {
       hasUntappdPermission: hasReservedPerm,
       runStep: async () => outcome('done'),
     }, memoryStore({
-      [CHECKS_KEY]: { date: '2026-11-22', count: MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS },
+      [CHECKS_KEY]: { date: '2026-11-22', count: 3 },
     }));
     t3.setNow(new Date(2026, 10, 22, 18, 0, 0));
     const activityCheck = t3.scheduler.checkIfStale(60 * 60_000, { reserveForAlarm: true });
@@ -656,6 +655,6 @@ describe('checkIfStale and LAST_CHECK_KEY', () => {
     releaseReservedPerm(true);
     expect(await Promise.all([activityCheck, alarmCheck])).toEqual(['daily_limit', 'started']);
     await t3.scheduler.idle();
-    expect(t3.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: MAX_CHECKS_PER_DAY });
+    expect(t3.store.data.get(CHECKS_KEY)).toEqual({ date: '2026-11-22', count: 4 });
   });
 });

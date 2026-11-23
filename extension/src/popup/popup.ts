@@ -60,9 +60,8 @@ function checkins(n: number): string {
   return n === 1 ? '1 check-in' : `${count(n)} check-ins`;
 }
 
-export function recheckFeedbackText(updated: boolean | number): string {
-  const hasUpdates = typeof updated === 'boolean' ? updated : updated > 0;
-  return hasUpdates ? 'Check-ins updated.' : 'No new check-ins.';
+export function recheckFeedbackText(updated: boolean): string {
+  return updated ? 'Check-ins updated.' : 'No new check-ins.';
 }
 
 /** #934 §6: one label, one bar, one action per sync state. */
