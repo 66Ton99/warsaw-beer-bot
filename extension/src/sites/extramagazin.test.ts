@@ -90,8 +90,13 @@ describe('extramagazin adapter', () => {
   it('parses all 24 beer cards from the live /uk/cerveza fixture with canonical Untappd identities', () => {
     const cards = parse(beerHtml);
     expect(cards.map(({ brewery, name, abv, nonBeer }) => ({ brewery, name, abv, nonBeer }))).toEqual([
-      { brewery: 'Grupa Żywiec', name: 'Warka Energy Original', abv: 0, nonBeer: undefined },
-      { brewery: 'Carlsberg Ukraine', name: 'Львівське 1715 Безалкогольне', abv: 0, nonBeer: undefined },
+      { brewery: 'Grupa Żywiec', name: 'Warka Energy Original 0.0%', abv: 0, nonBeer: undefined },
+      {
+        brewery: 'Carlsberg Ukraine',
+        name: 'Львівське 1715 Безалкогольне (Lvivske 1715 Bezalkoholne) 0.0%',
+        abv: 0,
+        nonBeer: undefined,
+      },
       { brewery: 'Browar Łomża', name: 'Łomża Mocna Wiśnia 9%', abv: 9, nonBeer: undefined },
       { brewery: 'Browar Łomża', name: 'Łomża 0,0%', abv: 0, nonBeer: undefined },
       { brewery: 'Perła - Browary Lubelskie S.A.', name: 'PERLA CHMIELOWA', abv: 6, nonBeer: undefined },
@@ -103,7 +108,7 @@ describe('extramagazin adapter', () => {
       { brewery: 'Carlsberg Ukraine', name: 'Lvivske Blonde', abv: 3.7, nonBeer: undefined },
       {
         brewery: 'AB InBev Efes',
-        name: 'Stary Melnik Iz Bochonka Myagkoe (Старый Мельник Из Бочонка Мягкое)',
+        name: 'Stary Melnik Iz Bochonka Myagkoe (Старый Мельник Из Бочонка Мягкое) (Staryi Melnyk Yz Bochonka Miahkoe)',
         abv: 4.2,
         nonBeer: undefined,
       },
@@ -111,7 +116,7 @@ describe('extramagazin adapter', () => {
       { brewery: 'Żywiec', name: 'ZYWIEC', abv: 5.6, nonBeer: undefined },
       {
         brewery: 'Lidskae Piva (Лідскае Піва)',
-        name: 'Zhigulevskoe special (Жигулевское Специальное)',
+        name: 'Zhigulevskoe special (Жигулевское Специальное) (Zhyhulevskoe Spetsyalnoe)',
         abv: 5.2,
         nonBeer: undefined,
       },
@@ -120,7 +125,7 @@ describe('extramagazin adapter', () => {
       { brewery: 'Volfas Engelman', name: 'APA', abv: 5, nonBeer: undefined },
       { brewery: 'Опілля (Opillia)', name: 'DUNKEL EXPORT', abv: 4.8, nonBeer: undefined },
       { brewery: 'Опілля (Opillia)', name: '1851 EXPORT', abv: 4.7, nonBeer: undefined },
-      { brewery: 'AB InBev Efes Ukraine', name: 'Чернігівське Light', abv: 4.3, nonBeer: undefined },
+      { brewery: 'AB InBev Efes Ukraine', name: 'Чернігівське Light (Chernihivske)', abv: 4.3, nonBeer: undefined },
       { brewery: 'Опілля (Opillia)', name: 'Білий Келих (Bilyi Kelykh)', abv: 4.2, nonBeer: undefined },
       { brewery: 'Опілля (Opillia)', name: 'Корифей (Koryfei)', abv: 4.2, nonBeer: undefined },
       { brewery: 'Browar Namysłów', name: 'Namysłów Pils', abv: 5.8, nonBeer: undefined },
@@ -185,8 +190,28 @@ describe('extramagazin adapter', () => {
     `);
 
     expect(cards.map(({ brewery, name, abv }) => ({ brewery, name, abv }))).toEqual([
-      { brewery: 'Carlsberg Ukraine', name: 'Львівське 1715 Безалкогольне', abv: 0 },
+      { brewery: 'Carlsberg Ukraine', name: 'Львівське 1715 Безалкогольне (Lvivske 1715 Bezalkoholne) 0.0%', abv: 0 },
       { brewery: 'Carlsberg Ukraine', name: 'Lvivske 1715', abv: 4.5 },
+    ]);
+  });
+
+  it('keeps the alcohol-free 1715 override and a regular 1715 on an unknown slug under different cache keys', () => {
+    const cards = parse(`
+      ${cardHtml({
+        brand: 'LVIVSKE',
+        title: 'Пиво безалкогольне «1715» 0,0% 20×450 мл ЛЬВІВСЬКЕ',
+        href: 'https://extramagazin.es/uk/products/cerveza-sin-alcohol-1715-00-20450-ml-lvivske.html',
+      })}
+      ${cardHtml({
+        brand: 'LVIVSKE',
+        title: 'Пиво «1715» 4,7% 20×500 мл ЛЬВІВСЬКЕ',
+        href: 'https://extramagazin.es/uk/products/cerveza-1715-47-20500-ml-lvivske.html',
+      })}
+    `);
+
+    expect(cards.map(({ brewery, name }) => normalizeKey(brewery, name))).toEqual([
+      'carlsberg ukraine|1715 lvivske 1715 bezalkoholne 0 0',
+      'carlsberg ukraine|1715',
     ]);
   });
 
@@ -292,6 +317,21 @@ describe('extramagazin adapter', () => {
     ]);
   });
 
+  it.each([
+    ['KOZEL', 'Cerveza KOZEL claro 0.0% 500 ml', { brewery: 'Pivovar Velké Popovice', name: 'claro 0.0%', abv: 0 }],
+    ['KOZEL', 'Cerveza KOZEL negro 5.2% 500 ml', { brewery: 'Pivovar Velké Popovice', name: 'KOZEL negro', abv: 5.2 }],
+    ['LVIVSKE', 'Cerveza LVIVSKE clara 4.8% 500 ml', { brewery: 'Carlsberg Ukraine', name: 'clara', abv: 4.8 }],
+    [
+      'TYSKIE',
+      'Пиво "BROWARY KSIAZECE" 0.0% 500 мл TYSKIE',
+      { brewery: 'Tyskie Browary Książęce', name: 'BROWARY KSIAZECE 0.0%', abv: 0 },
+    ],
+    ['ZYWIEC', 'Пиво світле NAMYSLOW 6,5% 24×500 мл ж б ZYWIEC', { brewery: 'Żywiec', name: 'NAMYSLOW', abv: 6.5 }],
+  ])('leaves a %s card with an unproven ABV (%s) to generic matching', (brand, title, expected) => {
+    const cards = parse(cardHtml({ brand, title }));
+    expect(cards.map(({ brewery, name, abv }) => ({ brewery, name, abv }))).toEqual([expected]);
+  });
+
   it('canonically resolves Tyskie Browary Książęce and Namysłów fallback names', () => {
     const cards = parse(`
       ${cardHtml({ brand: 'TYSKIE', title: 'Пиво "BROWARY KSIAZECE" 5.5% 500 мл TYSKIE' })}
@@ -331,7 +371,7 @@ describe('extramagazin adapter', () => {
       'Cerveza clara «Chernigivske light» 4,3% 24×500 ml lata',
       'https://extramagazin.es/products/cerveza-clara-chernigivske-light-43-24500-ml-lata.html',
       'AB InBev Efes Ukraine',
-      'Чернігівське Light',
+      'Чернігівське Light (Chernihivske)',
       4.3,
     ],
     [
@@ -358,7 +398,7 @@ describe('extramagazin adapter', () => {
       'Пиво традиционный лагер URSUS 5.0% 24x.500 мл',
       'https://extramagazin.es/ru/products/cerveza-test.html',
       'Ursus Breweries SA',
-      'традиционный лагер URSUS',
+      'традиционный лагер URSUS (tradytsyonnyi laher)',
       5,
     ],
     [
@@ -414,17 +454,17 @@ describe('extramagazin adapter', () => {
     expect(cards.map(({ brewery, name, abv }) => ({ brewery, name, abv }))).toEqual([
       {
         brewery: 'Lidskae Piva (Лідскае Піва)',
-        name: 'Lidski bread kvass (Квас Лидский Хлебный)',
+        name: 'Lidski bread kvass (Квас Лидский Хлебный) (Kvas Lydskyi Khlebnyi)',
         abv: undefined,
       },
       {
         brewery: 'Lidskae Piva (Лідскае Піва)',
-        name: 'Lidski Dark kvass (Квас Лидский Темный)',
+        name: 'Lidski Dark kvass (Квас Лидский Темный) (Kvas Lydskyi Temnyi)',
         abv: undefined,
       },
       {
         brewery: 'Carlsberg Ukraine',
-        name: 'Kvass Taras Chornyi (Квас Тарас Чорний)',
+        name: 'Kvass Taras Chornyi (Квас Тарас Чорний) (Kvas Taras Chornyi)',
         abv: undefined,
       },
       { brewery: 'Опілля (Opillia)', name: 'Квас Білий (Kvas Bilyi)', abv: undefined },
@@ -471,7 +511,7 @@ describe('extramagazin adapter', () => {
 
     expect(cards.map(({ brewery, name, abv, nonBeer }) => ({ brewery, name, abv, nonBeer }))).toEqual([
       { brewery: 'Apimiel', name: 'Медовуха (Medovukha)', abv: 6, nonBeer: undefined },
-      { brewery: 'Obolon', name: 'Radler лимон', abv: 2, nonBeer: undefined },
+      { brewery: 'Obolon', name: 'Radler лимон (lymon)', abv: 2, nonBeer: undefined },
     ]);
   });
 
@@ -600,6 +640,31 @@ describe('extramagazin adapter', () => {
       'opillia|koryfei',
       'opillia|bilyi kelykh',
       'opillia|svitle 0 0',
+    ]);
+  });
+
+  it('keeps mixed Cyrillic/Latin names that differ only in Cyrillic under different cache keys', () => {
+    const cards = parse(`
+      ${cardHtml({ brand: 'OPILLIA', title: 'Пиво Білий IPA 5% 500 мл' })}
+      ${cardHtml({ brand: 'OPILLIA', title: 'Пиво Чорний IPA 5% 500 мл' })}
+    `);
+
+    expect(cards.map(({ name }) => name)).toEqual(['Білий IPA (Bilyi)', 'Чорний IPA (Chornyi)']);
+    expect(cards.map(({ brewery, name }) => normalizeKey(brewery, name))).toEqual([
+      'opillia|ipa bilyi',
+      'opillia|ipa chornyi',
+    ]);
+  });
+
+  it('keeps mixed names with their own parenthetical apart when they differ only in Cyrillic', () => {
+    const cards = parse(`
+      ${cardHtml({ brand: 'OPILLIA', title: 'Пиво Білий IPA (dry hop) 5% 500 мл' })}
+      ${cardHtml({ brand: 'OPILLIA', title: 'Пиво Чорний IPA (dry hop) 5% 500 мл' })}
+    `);
+
+    expect(cards.map(({ brewery, name }) => normalizeKey(brewery, name))).toEqual([
+      'opillia|ipa dry hop bilyi',
+      'opillia|ipa dry hop chornyi',
     ]);
   });
 
