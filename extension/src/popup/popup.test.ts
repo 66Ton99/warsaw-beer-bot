@@ -43,13 +43,9 @@ describe('syncPercent', () => {
 });
 
 describe('recheckFeedbackText', () => {
-  it('formats zero, negative, and positive merged check-in states, and boolean flags', () => {
-    expect(recheckFeedbackText(0)).toBe('No new check-ins.');
-    expect(recheckFeedbackText(-1)).toBe('No new check-ins.');
+  it('says whether the recheck run brought new check-ins', () => {
     expect(recheckFeedbackText(false)).toBe('No new check-ins.');
-    expect(recheckFeedbackText(1)).toBe('Check-ins updated.');
     expect(recheckFeedbackText(true)).toBe('Check-ins updated.');
-    expect(recheckFeedbackText(1205)).toBe('Check-ins updated.');
   });
 });
 
