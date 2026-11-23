@@ -152,7 +152,7 @@ function productSlug(el: HTMLElement): string {
 }
 
 function stripVolume(text: string): string {
-  return text.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:cl|ml|l)\b.*$/i, '').trim();
+  return text.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:cl|ml|l)\s*$/i, '').trim();
 }
 
 function cleanBeerName(rawTitle: string, brewery: string): string {

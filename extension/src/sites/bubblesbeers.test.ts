@@ -69,22 +69,22 @@ describe('bubblesbeers adapter', () => {
       cards.map(({ brewery, name, style, nonBeer }) => ({
         brewery,
         name,
-        ...(style ? { style } : {}),
-        ...(nonBeer ? { nonBeer } : {}),
+        style,
+        nonBeer,
       })),
     ).toEqual([
-      { brewery: 'Cervezas Althaia', name: 'Barlovento', style: 'Smoked Imperial Stout' },
-      { brewery: 'Cervezas Althaia', name: 'Mascarat', style: 'Black Rye IPA' },
-      { brewery: 'Cervezas Althaia', name: 'Mediterranean IPA', style: 'American ipa' },
-      { brewery: 'Cervezas Althaia', name: 'Mediterranean Tostada Sin Alcohol' },
-      { brewery: 'Attik Brewing', name: 'Smile', style: 'West Coast IPA sin gluten' },
-      { brewery: 'Attik Brewing', name: 'Zessie', style: 'Wild Ale Cereza' },
-      { brewery: '', name: '', nonBeer: true },
-      { brewery: 'Garage Beer Co.', name: 'Lollies', style: 'Berliner weisse' },
-      { brewery: 'Garage Beer Co.', name: 'Stef', style: 'West Coast Pils' },
-      { brewery: 'Garage Beer Co.', name: 'Viduka', style: 'New England Pale Ale' },
-      { brewery: 'La Quince Brewing Co.', name: 'Mr. Bubbles', style: 'Czech Lager Sin Gluten' },
-      { brewery: 'La Quince Brewing Co.', name: 'The Wonder Blade', style: 'West Coast Pils – Sin gluten' },
+      { brewery: 'Cervezas Althaia', name: 'Barlovento', style: 'Smoked Imperial Stout', nonBeer: undefined },
+      { brewery: 'Cervezas Althaia', name: 'Mascarat', style: 'Black Rye IPA', nonBeer: undefined },
+      { brewery: 'Cervezas Althaia', name: 'Mediterranean IPA', style: 'American ipa', nonBeer: undefined },
+      { brewery: 'Cervezas Althaia', name: 'Mediterranean Tostada Sin Alcohol', style: undefined, nonBeer: undefined },
+      { brewery: 'Attik Brewing', name: 'Smile', style: 'West Coast IPA sin gluten', nonBeer: undefined },
+      { brewery: 'Attik Brewing', name: 'Zessie', style: 'Wild Ale Cereza', nonBeer: undefined },
+      { brewery: '', name: '', style: undefined, nonBeer: true },
+      { brewery: 'Garage Beer Co.', name: 'Lollies', style: 'Berliner weisse', nonBeer: undefined },
+      { brewery: 'Garage Beer Co.', name: 'Stef', style: 'West Coast Pils', nonBeer: undefined },
+      { brewery: 'Garage Beer Co.', name: 'Viduka', style: 'New England Pale Ale', nonBeer: undefined },
+      { brewery: 'La Quince Brewing Co.', name: 'Mr. Bubbles', style: 'Czech Lager Sin Gluten', nonBeer: undefined },
+      { brewery: 'La Quince Brewing Co.', name: 'The Wonder Blade', style: 'West Coast Pils – Sin gluten', nonBeer: undefined },
     ]);
   });
 
@@ -115,23 +115,26 @@ describe('bubblesbeers adapter', () => {
     ]);
   });
 
-  it('strips volume from both beer name and style', () => {
+  it('strips trailing volume from both beer name and style, keeping internal volume tokens', () => {
     const parsed = parse(`
       ${card('Garage – Soup – Hazy IPA 44cl')}
       ${card('Garage – Soup 33cl – IPA')}
       ${card('Althaia – Mistral 33cl')}
+      ${card('Garage – 33cl of Happiness – IPA')}
     `);
 
     expect(
-      parsed.map(({ brewery, name, style }) => ({
+      parsed.map(({ brewery, name, style, nonBeer }) => ({
         brewery,
         name,
-        ...(style ? { style } : {}),
+        style,
+        nonBeer,
       })),
     ).toEqual([
-      { brewery: 'Garage Beer Co.', name: 'Soup', style: 'Hazy IPA' },
-      { brewery: 'Garage Beer Co.', name: 'Soup', style: 'IPA' },
-      { brewery: 'Cervezas Althaia', name: 'Mistral' },
+      { brewery: 'Garage Beer Co.', name: 'Soup', style: 'Hazy IPA', nonBeer: undefined },
+      { brewery: 'Garage Beer Co.', name: 'Soup', style: 'IPA', nonBeer: undefined },
+      { brewery: 'Cervezas Althaia', name: 'Mistral', style: undefined, nonBeer: undefined },
+      { brewery: 'Garage Beer Co.', name: '33cl of Happiness', style: 'IPA', nonBeer: undefined },
     ]);
   });
 
