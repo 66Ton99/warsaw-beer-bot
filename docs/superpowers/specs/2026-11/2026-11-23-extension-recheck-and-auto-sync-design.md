@@ -1,7 +1,7 @@
 # Кнопка оновлення біля «✓ Fully synced» і автосинк при відкритті крамниць
 
 Дата: 2026-11-23
-Статус: чекає на затвердження
+Статус: затверджено 2026-11-23
 Spec-review: codex/gpt-6.1-sol @ 495ff6b (author: agy) — 4 findings: 4 fixed, 0 rejected
 
 ## Для власника
@@ -69,14 +69,14 @@ Spec-review: codex/gpt-6.1-sol @ 495ff6b (author: agy) — 4 findings: 4 fixed, 
    - `checkOnInstalled()` викликає `syncScheduler.checkIfStale()` (6-год поріг); `checkOnShopActivity()` викликає `syncScheduler.checkIfStale(ACTIVITY_CHECK_COOLDOWN_MS, { reserveForAlarm: true })` з обробників `match` і `cache:get-many`. Усі фонові виклики приглушують unhandled rejection через `.catch(() => undefined)`.
 3. **Popup (`extension/src/popup/popup.html`, `popup.css`, `popup.ts`):**
    - Кнопка `#syncRecheck` у `.sync-head` поруч із `#syncLabel` видима лише при `done && caughtUp`, мінімальний розмір 24×24 CSS px (`min-inline-size` / `min-block-size`), SVG із `aria-hidden="true"`.
-   - `recheckFeedbackText(mergedThisRun)` показує `No new check-ins.` або `Check-ins updated.` лише після завершення ручної перевірки з цього popup.
+   - `recheckFeedbackText(updated)` показує `No new check-ins.` або `Check-ins updated.` лише після завершення ручної перевірки через `#syncRecheck` із цього popup (доказ береться з приросту лічильника чекінів `serverCount` за час прогону).
    - `renderSyncWidget` переносить фокус між `#syncRecheck` та `#syncCheckins`, коли активна кнопка стає `hidden`.
 
 ### Тестування
 
 - `sync-scheduler.test.ts`: `LAST_CHECK_KEY` у `check()` і `startManual()` (після `writeIntent`), `checkIfStale` (`'fresh'`, границі через `it.each`, `INTENT_KEY` / `loopPromise` → `'running'`), `reserveForAlarm` (зупинка на 3 з 4, 4-й слот лишається для `check()`), throttle у `daily_limit` і `paused` без I/O та скидання після `startManual()`, серіалізація паралельних викликів.
 - `index.test.ts`: `onInstalled` (відсутній, застарілий і свіжий `LAST_CHECK_KEY`), `checkOnShopActivity` на `match` і `cache:get-many` із перевіркою `'fresh'` / `'daily_limit'` і збереженням резерву, без `setTimeout`-гонок.
-- `popup.test.ts`: `recheckFeedbackText`, видимість і клік `#syncRecheck`, відмова в дозволі, показ підсумку після перевірки, перенесення фокусу клавіатури.
+- `popup.test.ts`: `recheckFeedbackText`, видимість і клік `#syncRecheck`, відмова в дозволі, показ підсумку після ↻ (зокрема коли позитивний крок завершується між опитуваннями), відсутність підсумку після звичайного синку, перенесення фокусу клавіатури.
 
 ## Заявка → доказ
 
@@ -85,7 +85,7 @@ Spec-review: codex/gpt-6.1-sol @ 495ff6b (author: agy) — 4 findings: 4 fixed, 
 | Час останньої реальної перевірки/старту (`syncLastCheckAt`) | `chrome.storage.local` | Що в момент T стартував ручний або тихий синк (не записується при `fresh`, `paused`, `daily_limit`, `no_permission`, `never_synced`) | Середня (системний годинник; при зсуві годинника назад `elapsed < 0` трактується як застарілий і перевіряється) |
 | Лічильник добових перевірок і резерв 1 слоту (`syncChecks`) | `chrome.storage.local` | Що за локальну добу стартувало не більше `MAX_CHECKS_PER_DAY` перевірок, із них активність крамниць узяла щонайбільше `MAX_CHECKS_PER_DAY - ACTIVITY_RESERVED_SLOTS` | Сильна (записується до запуску циклу під `checkInFlight`-блокуванням) |
 | In-memory throttle не-стартових спроб | Пам'ять service worker'а (`lastAttemptMs`, `lastAttemptCap`) | Що протягом 60 с у живому воркері повторний виклик із тим самим або жорсткішим лімітом не робить I/O; скидається на `startManual()` і `check()` | Сильна (лише оптимізація частоти перевірок; смерть воркера безпечно скидає throttle) |
-| Підсумок після ↻ (`No new check-ins.` / `Check-ins updated.`) | DOM popup (`#syncStatus`) | Чи були нові чекіни в останньому завершеному кроці (`mergedThisRun > 0`), без твердження про точну суму багатокрокового прогону | Сильна (читається безпосередньо зі стану завершеного кроку, показується лише після ручного запуску з цього popup) |
+| Підсумок після ↻ (`No new check-ins.` / `Check-ins updated.`) | DOM popup (`#syncStatus`) | Чи зріс лічильник збережених чекінів (`serverCount > recheckBaseCount`) за весь прогін ручної перевірки, запущеної через `#syncRecheck` | Сильна (порівняння збереженого лічильника на старті й фініші прогону в поточному popup; не залежить від вибірки проміжних статусів планувальника) |
 
 ## Рев'ю спеки
 
@@ -95,3 +95,11 @@ Spec-review: codex/gpt-6.1-sol @ 495ff6b (author: agy) — 4 findings: 4 fixed, 
 | 2 | [6] Паралельний `check()` може успадкувати `daily_limit` від суворішого `reserveForAlarm: true` | виправлено | `checkInFlight` тепер зберігає `{ promise, maxChecks }`: виклик із більшим `maxChecks` повторно оцінює бюджет, якщо перший не стартував; додано тест у `sync-scheduler.test.ts` |
 | 3 | [3] У «Що зміниться для тебе» формулювання про старт воркера суперечило тригеру лише на `onInstalled` | виправлено | Чітко розмежовано: старт воркера лише відновлює `wbb-sync-check`, а негайна перевірка давності ≥ 6 год іде на `onInstalled` (Reload/оновлення) |
 | 4 | [6] `mergedThisRun` на фінальному кроці багатокрокового ручного синку дає лише кількість останнього кроку, а не всього прогону | виправлено | Замінено `Added N new check-ins.` на чесний безчисловий підсумок `Check-ins updated.` у `popup.ts`, тестах, `spec.md`, `CHANGELOG.md` і спеці |
+
+## Поправки
+
+### Поправка 1 (2026-11-23, після затвердження спеки власником)
+
+1. **Доказ підсумку після ↻ перенесено на лічильник усього прогону.** `popup.ts` при натисканні ↻ фіксує поточний `serverCount` (`recheckBaseCount`) і після завершення прогону показує `Check-ins updated.`, якщо фінальний `serverCount > recheckBaseCount`, або `No new check-ins.`, якщо лічильник не змінився. Це усуває залежність від потрапляння проміжних кроків із `mergedThisRun > 0` в 1,5-секундний інтервал опитування воркера (підтверджено новим тестом у `popup.test.ts`, де позитивний крок цілком проходить між опитуваннями).
+2. **Підсумок обмежено лише кнопкою ↻.** Натискання великої кнопки `Sync` / `Sync again` не виставляє очікування підсумку; відгук з'являється виключно після ручної перевірки через `#syncRecheck` у стані «✓ Fully synced».
+3. **Вплив на секцію «Для власника»:** відсутній (мета, ключове рішення 3, поведінка для користувача й обіцянки `spec.md` не змінюються; змінюється лише внутрішній механізм фіксації факту появи нових чекінів для усунення помилкового `No new check-ins.`). Статус спеки залишається `затверджено 2026-11-23`.
