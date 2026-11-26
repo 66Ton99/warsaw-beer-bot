@@ -242,4 +242,22 @@ describe('bubblesbeers adapter', () => {
       expect(c.skip).toBeUndefined();
     }
   });
+
+  it('marks incomplete titles with missing segments or volume-only names as unparsed', () => {
+    const unparsed = parse(`
+      ${card('Garage – – IPA')}
+      ${card('– Soup – Hazy IPA')}
+      ${card('Garage – 44cl – IPA')}
+      ${card('Althaia – ')}
+    `);
+
+    expect(
+      unparsed.map(({ brewery, name, skip, skipReason }) => ({ brewery, name, skip, skipReason })),
+    ).toEqual([
+      { brewery: '', name: 'Garage – – IPA', skip: true, skipReason: 'unparsed' },
+      { brewery: '', name: '– Soup – Hazy IPA', skip: true, skipReason: 'unparsed' },
+      { brewery: '', name: 'Garage – 44cl – IPA', skip: true, skipReason: 'unparsed' },
+      { brewery: '', name: 'Althaia –', skip: true, skipReason: 'unparsed' },
+    ]);
+  });
 });

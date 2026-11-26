@@ -177,20 +177,33 @@ function parseTitleParts(rawTitle: string): { brewery: string; name: string; sty
   const trimmed = rawTitle.replace(/\s+/g, ' ').trim();
   const parts = trimmed
     .split(/\s*(?:[\u2013\u2014]|\s+-\s*|\s*-\s+)\s*/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
+    .map((p) => p.trim());
 
   if (parts.length >= 3) {
     const rawBrewery = parts[0];
-    const name = cleanBeerName(parts[1], rawBrewery);
-    const rawStyle = parts.slice(2).join(' – ');
+    const rawName = parts[1];
+    if (!rawBrewery || !rawName) {
+      return { brewery: '', name: '' };
+    }
+    const name = cleanBeerName(rawName, rawBrewery);
+    if (!name) {
+      return { brewery: '', name: '' };
+    }
+    const rawStyle = parts.slice(2).filter(Boolean).join(' – ');
     const style = stripVolume(rawStyle);
     return { brewery: canonicalBrewery(rawBrewery), name, ...(style ? { style } : {}) };
   }
 
   if (parts.length === 2) {
     const rawBrewery = parts[0];
-    const name = cleanBeerName(parts[1], rawBrewery);
+    const rawName = parts[1];
+    if (!rawBrewery || !rawName) {
+      return { brewery: '', name: '' };
+    }
+    const name = cleanBeerName(rawName, rawBrewery);
+    if (!name) {
+      return { brewery: '', name: '' };
+    }
     return { brewery: canonicalBrewery(rawBrewery), name };
   }
 
@@ -263,7 +276,7 @@ export const bubblesbeers: SiteAdapter = {
       const name = override?.name ?? parsed.name;
       const effectiveStyle = parsed.style;
 
-      if (!brewery) {
+      if (!brewery || !name) {
         cards.push({ el, brewery: '', name: rawTitle, skip: true, skipReason: 'unparsed' });
         continue;
       }
