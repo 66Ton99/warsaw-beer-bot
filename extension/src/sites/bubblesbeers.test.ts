@@ -149,7 +149,7 @@ describe('bubblesbeers adapter', () => {
     expect(saez.name).toBe('Mistbound');
   });
 
-  it('requires word boundary for known brewery prefix to avoid cutting beer names', () => {
+  it('requires word boundary for known brewery prefix and marks cards with unknown brewery as unparsed', () => {
     const parsed = parse(`
       ${card('Attikus Lager')}
       ${card('Deyaz Something')}
@@ -157,11 +157,11 @@ describe('bubblesbeers adapter', () => {
     `);
 
     expect(
-      parsed.map(({ brewery, name }) => ({ brewery, name })),
+      parsed.map(({ brewery, name, skip, skipReason }) => ({ brewery, name, skip, skipReason })),
     ).toEqual([
-      { brewery: '', name: 'Attikus Lager' },
-      { brewery: '', name: 'Deyaz Something' },
-      { brewery: '', name: 'UnknownBrewery CoolBeer' },
+      { brewery: '', name: 'Attikus Lager', skip: true, skipReason: 'unparsed' },
+      { brewery: '', name: 'Deyaz Something', skip: true, skipReason: 'unparsed' },
+      { brewery: '', name: 'UnknownBrewery CoolBeer', skip: true, skipReason: 'unparsed' },
     ]);
   });
 

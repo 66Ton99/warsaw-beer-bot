@@ -10,6 +10,8 @@ function text(el: Element | null | undefined): string {
  * Checked strictly against the first segment (brand) of the title to avoid false
  * positives on real beers containing flavor or series names like "Tangerine",
  * "Wolf Pack", "Cream Soda Sour", "Cola de Caballo", "Copa del Rey", or "Taller".
+ * Note: the global isNonBeerName() helper checks universal non-beer multi-word phrases
+ * across the full title, while ES_NON_BEER_BRAND_RE checks only the initial brand segment.
  */
 const ES_NON_BEER_BRAND_RE =
   /^(?:caja\s+sorpresa|pack\b|club\s+cervecero|bubbles\s+beer\s+club|luno\s+soda|tarjeta\s+de\s+regalo|abridor|vaso|camiseta|gorra|cata\b)/i;
@@ -260,6 +262,11 @@ export const bubblesbeers: SiteAdapter = {
       const brewery = override?.brewery ?? parsed.brewery;
       const name = override?.name ?? parsed.name;
       const effectiveStyle = parsed.style;
+
+      if (!brewery) {
+        cards.push({ el, brewery: '', name: rawTitle, skip: true, skipReason: 'unparsed' });
+        continue;
+      }
 
       cards.push({
         el,
