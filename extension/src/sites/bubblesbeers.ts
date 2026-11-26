@@ -22,10 +22,6 @@ const NON_BEER_PAGE_RE =
 const CANONICAL_BREWERIES: Readonly<Record<string, string>> = {
   althaia: 'Cervezas Althaia',
   attik: 'Attik Brewing',
-  basqueland: 'Basqueland Brewing',
-  'basqueland brewing': 'Basqueland Brewing',
-  deya: 'DEYA Brewing Company',
-  'deya brewing company': 'DEYA Brewing Company',
   garage: 'Garage Beer Co.',
   'garage beer': 'Garage Beer Co.',
   'garage beer co': 'Garage Beer Co.',
@@ -48,11 +44,9 @@ const CANONICAL_BREWERIES: Readonly<Record<string, string>> = {
   'saez and son': 'Sáez & Son',
   'sáez and son': 'Sáez & Son',
   yakka: 'Cervezas Yakka',
-  'cervezas alhambra': 'Cervezas Alhambra',
-  alhambra: 'Cervezas Alhambra',
 };
 
-const SLUG_OVERRIDES: Readonly<Record<string, { brewery: string; name: string }>> = {
+const SLUG_OVERRIDES: Readonly<Record<string, { brewery?: string; name?: string; skip?: boolean }>> = {
   // Untappd bid 7401043
   'rio-azul-x-laquince-a-giant-leap-for-an-ape-tiramisu-patry-stout': {
     brewery: 'La Quince Brewing Co.',
@@ -78,10 +72,15 @@ const SLUG_OVERRIDES: Readonly<Record<string, { brewery: string; name: string }>
     brewery: 'Oddity Brewing',
     name: 'Wildfires',
   },
+  // Untappd bid 5292594: Oso Brew Co — Mesa (Table Beer).
+  // Missing from server catalog; fuzzy search on "Mesa" incorrectly matches "Ménage À Trois" (bid 5019595).
+  // Skipped deliberately to avoid showing a false positive badge.
+  'oso-brew-co-mesa-table-beer': {
+    skip: true,
+  },
 };
 
 const KNOWN_BREWERIES = [
-  'Cervezas Alhambra',
   'Companyia Cervesera del Montseny',
   'La Quince Brewing Co.',
   'La Sitgetana Craftbeer',
@@ -105,12 +104,7 @@ const KNOWN_BREWERIES = [
   'Rio Azul',
   'Althaia',
   'Attik',
-  'Basqueland',
-  'Deya',
-  'Espiga',
-  'FrauGruber',
   'Garage',
-  'Malandar',
   'Montseny',
   'Oddity',
   'Yakka',
@@ -274,6 +268,10 @@ export const bubblesbeers: SiteAdapter = {
 
       const slug = productSlug(el);
       const override = slug ? SLUG_OVERRIDES[slug] : undefined;
+      if (override?.skip) {
+        cards.push({ el, brewery: '', name: rawTitle, skip: true, skipReason: 'unparsed' });
+        continue;
+      }
       const parsed = parseTitleParts(rawTitle);
       const brewery = override?.brewery ?? parsed.brewery;
       const name = override?.name ?? parsed.name;

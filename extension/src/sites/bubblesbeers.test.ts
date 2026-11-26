@@ -92,7 +92,7 @@ describe('bubblesbeers adapter', () => {
     const realBeers = parse(`
       ${card('Oddity – Tangerine Dream – Hazy IPA')}
       ${card('Garage – Wolf Pack – IPA')}
-      ${card('Basqueland – Cream Soda Sour – Fruited Sour')}
+      ${card('Althaia – Cream Soda Sour – Fruited Sour')}
       ${card('La Quince – Cola de Caballo – Stout')}
       ${card('Attik – Copa del Rey – Lager')}
       ${card('Yakka – Taller de cerveza – IPA')}
@@ -108,7 +108,7 @@ describe('bubblesbeers adapter', () => {
     ).toEqual([
       { brewery: 'Oddity Brewing', name: 'Tangerine Dream', style: 'Hazy IPA', nonBeer: undefined },
       { brewery: 'Garage Beer Co.', name: 'Wolf Pack', style: 'IPA', nonBeer: undefined },
-      { brewery: 'Basqueland Brewing', name: 'Cream Soda Sour', style: 'Fruited Sour', nonBeer: undefined },
+      { brewery: 'Cervezas Althaia', name: 'Cream Soda Sour', style: 'Fruited Sour', nonBeer: undefined },
       { brewery: 'La Quince Brewing Co.', name: 'Cola de Caballo', style: 'Stout', nonBeer: undefined },
       { brewery: 'Attik Brewing', name: 'Copa del Rey', style: 'Lager', nonBeer: undefined },
       { brewery: 'Cervezas Yakka', name: 'Taller de cerveza', style: 'IPA', nonBeer: undefined },
@@ -152,7 +152,7 @@ describe('bubblesbeers adapter', () => {
   it('requires word boundary for known brewery prefix and marks cards with unknown brewery as unparsed', () => {
     const parsed = parse(`
       ${card('Attikus Lager')}
-      ${card('Deyaz Something')}
+      ${card('Althaias Something')}
       ${card('UnknownBrewery CoolBeer')}
     `);
 
@@ -160,7 +160,7 @@ describe('bubblesbeers adapter', () => {
       parsed.map(({ brewery, name, skip, skipReason }) => ({ brewery, name, skip, skipReason })),
     ).toEqual([
       { brewery: '', name: 'Attikus Lager', skip: true, skipReason: 'unparsed' },
-      { brewery: '', name: 'Deyaz Something', skip: true, skipReason: 'unparsed' },
+      { brewery: '', name: 'Althaias Something', skip: true, skipReason: 'unparsed' },
       { brewery: '', name: 'UnknownBrewery CoolBeer', skip: true, skipReason: 'unparsed' },
     ]);
   });
@@ -216,11 +216,15 @@ describe('bubblesbeers adapter', () => {
       ${card('Oddity – Wildfire – Neipa', 'Hazy IPA', '', {
         href: 'https://bubblesbeers.com/product/oddity-wildfires/',
       })}
+      ${card('Oso Brew Co. – Mesa – Table Beer', 'Lupuladas', '', {
+        href: 'https://bubblesbeers.com/product/oso-brew-co-mesa-table-beer/',
+      })}
     `);
     expect(parsed[0]).toMatchObject({ brewery: 'La Quince Brewing Co.', name: 'A GIANT LEAP FOR AN APE!' });
     expect(parsed[1]).toMatchObject({ brewery: 'Sáez & Son', name: 'TERP Fresh Press' });
     expect(parsed[2]).toMatchObject({ brewery: 'FELIPPA BREW CO by Sáez & Son', name: 'FELIPPA' });
     expect(parsed[3]).toMatchObject({ brewery: 'Oddity Brewing', name: 'Wildfires' });
+    expect(parsed[4]).toMatchObject({ skip: true, skipReason: 'unparsed' });
   });
 
   it('marks packs, surprise boxes, merchandise and sodas as non-beer via brand, categories and WooCommerce classes', () => {

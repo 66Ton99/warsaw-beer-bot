@@ -2,29 +2,31 @@
 
 Дата: 2026-11-26
 Статус: чекає на затвердження
-Spec-review: codex/gpt-6.1-sol @ 92e9526 (author: agy) — 2 findings: 2 fixed, 0 rejected
+Spec-review: pending
 
 ## Для власника
 
-**Мета.** Користувачі розширення бачать свій статус Untappd («вже пив» + особисту оцінку або глобальний рейтинг) на сторінках іспанського магазину крафтового пива `bubblesbeers.com` (каталог `/shop/`, категорії стилів, пагінація) — без потрапляння подарункових наборів, дегустацій, соди та мерчу в пошук, без хибного червоного `✕` на справжньому пиві з дескрипторами смаків чи серій на кшталт Tangerine чи Wolf Pack, і з видимим попередженням «Не змогли розібрати цю картку» для односегментних позицій без відомої броварні.
+**Мета.** Користувачі розширення бачать свій статус Untappd («вже пив» + особисту оцінку або глобальний рейтинг) на сторінках іспанського магазину крафтового пива `bubblesbeers.com` (каталог `/shop/`, категорії стилів, пагінація) — без потрапляння подарункових наборів, дегустацій, соди та мерчу в пошук, без хибного червоного `✕` на справжньому пиві з дескрипторами смаків чи серій на кшталт Tangerine чи Wolf Pack, без хибного бейджа чужого пива на столовому сорті Mesa, і з видимим попередженням «Не змогли розібрати цю картку» для односегментних позицій без відомої броварні.
 
 **Що зміниться для тебе.** Розширення отримує новий host permission для `https://bubblesbeers.com/*` та `https://*.bubblesbeers.com/*`. Через новий host permission наступний реліз потребуватиме ручного завантаження zip-пакета в Chrome Web Store (як задокументовано в `docs/extension-release.md`), а сама зміна на сервер нічого не додає і версію розширення не піднімає.
 
 **На чому стоїть рішення.**
 - Вітрина працює на WooCommerce SSR (тема Astra), де товари рендеряться в списку `ul.products` картками `li.product` із заголовками `h2.woocommerce-loop-product__title` `[проба]` (§Проби, 1).
-- Повний обхід живого каталогу (усі 4 сторінки `/shop/`, 40 унікальних товарів) показує: 33 позиції — пиво (32 з трьохкомпонентною структурою `Brewery – Name – Style` та 1 однокомпонентна з відомою броварнею `Yakka Querida Ipa`), 7 — не-пиво; живі проби через `POST /match` знаходять 32 з 33 сортів (97.0% match rate, 31 exact, 1 fuzzy, 1 null) `[проба]` (§Проби, 1).
-- Клієнтська канонізація броварень (`CANONICAL_BREWERIES`) критично необхідна: без неї `Montseny / IPA` дає `null` (промах), `Althaia` дає `fuzzy` замість `exact`, а `Yakka` без префікса `Cervezas` дає хибний збіг (`fuzzy`) на чужу броварню Amundsen Brewery `[проба]` (§Проби, 2).
-- П'ять специфічних SKU (`SLUG_OVERRIDES`) покривають колаборації, де пиво зареєстроване на Untappd під другою броварнею (`Rio Azul x La Quince` під `La Quince Brewing Co.`), та релізи з префіксами стилю або дочірніми брендами (`TERP Fresh Press`, `TERP Golden Hour`, `FELIPPA BREW CO by Sáez & Son`, `Wildfires`), забезпечуючи exact збіг з цільовими `bid` `[проба]` (§Проби, 3).
-- За `spec.md` §6 хибна відповідь гірша за відсутню: не-пиво фільтрується комбінацією глобального `isNonBeerName` по всій назві, префікса бренду `ES_NON_BEER_BRAND_RE` по першому сегменту та класів WooCommerce (`product_cat-packs`, `product_tag-soda` тощо), а картки без визначеної броварні отримують `skip: true, skipReason: 'unparsed'` з попередженням «Не змогли розібрати цю картку» замість запитів з порожньою броварнею `[вимога власника]`.
+- Повний обхід живого каталогу (усі 4 сторінки `/shop/`, 40 унікальних товарів) та фікстури показує: 38 позицій — пиво (37 із трьохкомпонентною структурою `Brewery – Name – Style` та 1 однокомпонентна з відомою броварнею `Yakka Querida Ipa`), 7 — не-пиво; живі проби через `POST /match` знаходять 33 з 38 сортів (33 exact matches, 4 чесні null через відсутність рідкісних позицій у базі сервера, 0 хибних fuzzy-бейдів) `[проба]` (§Проби, 1).
+- Клієнтська канонізація броварень (`CANONICAL_BREWERIES`) обмежена лише броварнями, підтвердженими фікстурою чи каталогом (Althaia, Attik, Garage, La Quince, La Sitgetana, Montseny, Octavo Arte, Oddity, Oso Brew, RIOAZUL, Sáez & Son, Yakka). Вона критично необхідна: без неї `Montseny / IPA` дає `null` (промах), `Althaia` дає `fuzzy` замість `exact`, а `Yakka` без префікса `Cervezas` дає небезпечний хибний збіг (`fuzzy`) на чужу броварню Amundsen Brewery `[проба]` (§Проби, 2). Непідтверджені позиції (Basqueland, Deya, Alhambra, Espiga) вилучено зі словників.
+- Шість специфічних SKU (`SLUG_OVERRIDES`) покривають колаборацію, зареєстровану на Untappd під другою броварнею (`Rio Azul x La Quince` під `La Quince Brewing Co.`), релізи з префіксами стилю або дочірніми брендами (`TERP Fresh Press`, `TERP Golden Hour`, `FELIPPA BREW CO by Sáez & Son`, `Wildfires`), а також сорт `Oso Brew Co. – Mesa – Table Beer` (`bid 5292594`), який відсутній у каталозі сервера і без оверрайду отримував хибний fuzzy-бейдж чужого сорту `Ménage À Trois` (`bid 5019595`) `[проба]` (§Проби, 3).
+- За `spec.md` §6 хибна відповідь гірша за відсутню: не-пиво фільтрується комбінацією глобального `isNonBeerName` по всій назві, префікса бренду `ES_NON_BEER_BRAND_RE` по першому сегменту та класів WooCommerce (`product_cat-packs`, `product_tag-soda` тощо), а картки без визначеної броварні або з пропущеними сегментами отримують `skip: true, skipReason: 'unparsed'` з попередженням «Не змогли розібрати цю картку» замість запитів з порожньою броварнею `[вимога власника]`.
 
 **Ключові рішення.**
 1. Розбиття назви за дефісом на `Brewery – Name – Style` із очищенням кінцевих об'ємів (`33cl`, `44cl` тощо) як із назви, так і зі стилю, а для 2-сегментних назв `style` лишається `undefined`, щоб категорії магазину (`Maltosas`, `Colaboraciones`) не підміняли стиль — розглянуто стандартне: підставляти категорію магазину як стиль — відкинуто, бо навігаційні категорії вітрини не є пивними стилями для `/enrich/*`.
-2. Клієнтський словник `CANONICAL_BREWERIES` для захисту від хибних збігів і промахів (Althaia, Attik, Basqueland, Deya, Garage, La Quince, La Sitgetana, Montseny, Octavo Arte, Oddity, Oso Brew, Rio Azul, Sáez & Son, Yakka) — розглянуто стандартне: передавати броварню як є і покладатися на нечіткий пошук сервера — відкинуто, бо жива проба виявила, що `Montseny / IPA` стає промахом (`null`), а `Yakka` дає хибний збіг на Amundsen Brewery.
-3. `skipReason: 'unparsed'` («Не змогли розібрати цю картку») для односегментних назв без відомої броварні — розглянуто стандартне: надсилати у `/match` з `brewery: ''` — відкинуто, бо це створює безрезультатні запити та ризик хибного матчу на поширені назви.
-4. Дворівнева фільтрація не-пива: глобальний `isNonBeerName` по всій назві + `ES_NON_BEER_BRAND_RE` строго по першому сегменту (бренду) + категорії/теги WooCommerce — розглянуто стандартне: шукати іспанські слова не-пива по всій назві — відкинуто, бо це ставило червоний `✕` на справжнє пиво з назвами на кшталт `Tangerine Dream`, `Wolf Pack`, `Cream Soda Sour`, `Cola de Caballo`, `Copa del Rey`.
-5. Збереження оригінальної іспанської назви з `data-success_message` кнопки додавання в кошик для захисту від вбудованого автоперекладу браузера.
+2. Клієнтський словник `CANONICAL_BREWERIES` захищає від хибних збігів і промахів для 12 перевірених брендів — розглянуто стандартне: передавати броварню як є і покладатися на нечіткий пошук сервера — відкинуто, бо жива проба виявила, що `Montseny / IPA` стає промахом (`null`), а `Yakka` дає хибний збіг на Amundsen Brewery.
+3. Колаборації (`Oso Brew Co x Hops Company`, `Oso Brew X Pühaste`): за замовчуванням береться перша броварня, що дає точні збіги `exact` на сервері. Для винятків, де на Untappd пиво приписане іншій броварні (`Rio Azul x La Quince` -> `La Quince Brewing Co.`), застосовується точковий `SLUG_OVERRIDES`.
+4. Свідомий пропуск (`skip: true, skipReason: 'unparsed'`) для `Oso Brew Co. – Mesa – Table Beer` (`oso-brew-co-mesa-table-beer`): сорт на Untappd має `bid 5292594`, але в локальній базі сервера відсутній, через що нечіткий матчер видавав хибний збіг на `Ménage À Trois` (`bid 5019595`, 4.09). За правилом §6 картку позначено як нерозібрану, щоб не показувати чуже пиво.
+5. `skipReason: 'unparsed'` («Не змогли розібрати цю картку») для односегментних назв без відомої броварні, карток із пропущеними сегментами (`Garage – – IPA`, `– Soup – Hazy IPA`), назв із відсіканням об'єму (`Garage – 44cl – IPA`) або заголовків лише з броварні (`Garage Beer Co.`) — розглянуто стандартне: надсилати у `/match` з `brewery: ''` чи вигаданими сегментами — відкинуто, бо це створює безрезультатні запити та ризик хибного матчу.
+6. Дворівнева фільтрація не-пива: глобальний `isNonBeerName` по всій назві + `ES_NON_BEER_BRAND_RE` строго по першому сегменту (бренду) + категорії/теги WooCommerce — розглянуто стандартне: шукати іспанські слова не-пива по всій назві — відкинуто, бо це ставило червоний `✕` на справжнє пиво з назвами на кшталт `Tangerine Dream`, `Wolf Pack`, `Cream Soda Sour`, `Cola de Caballo`, `Copa del Rey`.
+7. Збереження оригінальної іспанської назви з `data-success_message` кнопки додавання в кошик для захисту від вбудованого автоперекладу браузера.
 
-**Що стане гірше.** Товари нових іспанських крафтових броварень з односегментними назвами (без роздільника ` – ` і поза `KNOWN_BREWERIES`) не надішлються у `/match`, а покажуть жовтий бейдж-попередження «Не змогли розібрати цю картку» до додавання броварні в словник.
+**Що стане гірше.** Товари нових іспанських крафтових броварень з односегментними назвами (без роздільника ` – ` і поза `KNOWN_BREWERIES`), а також сорти без точного збігу на сервері, які тригерять хибний fuzzy (як Mesa), покажуть жовтий бейдж-попередження «Не змогли розібрати цю картку».
 
 **Оцінка.** Власник: S. Автор: S — адаптер (~40%), фікстури та тести (~35%), документація/спека/скріншоти (~25%).
 
@@ -34,12 +36,12 @@ Spec-review: codex/gpt-6.1-sol @ 92e9526 (author: agy) — 2 findings: 2 fixed, 
 
 ### Проби
 
-1. **Живий браузер і повний HTTP-обхід каталогу `bubblesbeers.com`:**
-   - Повністю опитано всі 4 сторінки каталогу магазину (`/shop/`, `/shop/page/2/`, `/shop/page/3/`, `/shop/page/4/`; сторінка 5 повертає 404).
-   - Каталог містить рівно 40 унікальних SKU (дедуплікованих за посиланням на товар): 33 пивні позиції та 7 не-пивних (паки, сода, коробки-сюрпризи).
-   - Розподіл структур назв пивних товарів: 32 мають трисегментну структуру `Brewery – Name – Style`, 0 — двосегментну, 1 — односегментну з відомою броварнею (`Yakka Querida Ipa`).
-   - Усі 33 пивні картки надіслано до `POST https://beer-api.ysilvestrov-ai.uk/match`.
-   - **Результат матчингу:** 31 exact match, 1 fuzzy match, 1 null match (32/33 знайдено, загальний match rate 97.0%).
+1. **Живий браузер і повний HTTP-обхід каталогу `bubblesbeers.com` (2026-11-26) та фікстури:**
+   - Повністю опитано всі 4 сторінки каталогу магазину (`/shop/`, `/shop/page/2/`, `/shop/page/3/`, `/shop/page/4/`; сторінка 5 повертає 404) та фікстуру `extension/tests/fixtures/bubblesbeers.html`.
+   - Каталог і фікстура сумарно містять 45 унікальних товарів: 38 пивних позицій та 7 не-пивних (паки, сода, коробка-сюрприз).
+   - Розподіл структур назв пивних товарів: 37 мають трисегментну структуру `Brewery – Name – Style`, 0 — двосегментну, 1 — односегментну з відомою броварнею (`Yakka Querida Ipa`).
+   - Усі 38 пивних карток прогнано через `POST https://beer-api.ysilvestrov-ai.uk/match`.
+   - **Результат матчингу:** 33 exact matches, 4 null matches (відсутні в каталозі сервера: `Althaia – Mediterranean Tostada Sin Alcohol`, `Attik – Smile`, `La Quince – The Wonder Blade`, `Yakka Querida Ipa`), 1 свідомо пропущена картка Mesa (`skipReason: 'unparsed'`), 0 хибних fuzzy-збігів.
 
 2. **Порівняння raw-броварні проти канонічної форми (`CANONICAL_BREWERIES`):**
    - `Montseny / IPA`: з raw `Montseny` дає `null` (промах); з канонічною `Companyia Cervesera del Montseny` дає `exact` (`bid 199890`).
@@ -49,13 +51,15 @@ Spec-review: codex/gpt-6.1-sol @ 92e9526 (author: agy) — 2 findings: 2 fixed, 
    - `Garage / Lollies`: обидві дають `exact` (`bid 6721018`).
    - `La Quince / Mr. Bubbles`: обидві дають `exact` (`bid 6196638`).
    - `La Sitgetana / Maricel`: обидві дають `exact` (`bid 2329121`).
-   - `Basqueland / Imparable`: обидві дають `exact` (`bid 801901`).
-   - `Deya / Steady Rolling Man`: обидві дають `exact` (`bid 1202873`).
    - `Oddity / Wildfires`: обидві дають `exact` (`bid 6147841`).
    - `Oso Brew / Ace High`: обидві дають `exact` (`bid 7659216`).
    - `Saez & Son / TERP Fresh Press`: обидві дають `exact` (`bid 7180590`).
+   - Усі непокриті каталогом броварні (Basqueland, Deya, Alhambra, Espiga) вилучено.
 
-3. **Аналіз оверрайдів (`SLUG_OVERRIDES`):**
+3. **Колаборації та аналіз оверрайдів (`SLUG_OVERRIDES`):**
+   - Колаборації зі звичайним порядком броварень:
+     - `Oso Brew Co x Hops Company – Happy Days – NEIPA`: розбивається за `x`, береться перша броварня `Oso Brew Co`. Запит `Oso Brew Co` / `Happy Days` повертає `exact` (`bid 7659220`, rating 3.87).
+     - `Oso Brew X Pühaste – Choc-a-bloc – Imperial Stout`: береться перша броварня `Oso Brew Co`. Запит `Oso Brew Co` / `Choc-a-bloc` повертає `exact` (`bid 7659224`, rating 4.14).
    - `rio-azul-x-laquince-a-giant-leap-for-an-ape-tiramisu-patry-stout`:
      - Назва на вітрині: `Rio Azul x La Quince – A Giant Leap for an Ape – Tiramisú Pastry Stout`.
      - На Untappd сорт зареєстровано під `La Quince Brewing Co.` як `A GIANT LEAP FOR AN APE!` (`bid 7401043`). Без оверрайду колаборація розбивається за першою броварнею `RIOAZUL`, що дає `null`. З оверрайдом — `exact`.
@@ -71,11 +75,14 @@ Spec-review: codex/gpt-6.1-sol @ 92e9526 (author: agy) — 2 findings: 2 fixed, 
    - `oddity-wildfires`:
      - Назва на вітрині містить однину: `Oddity – Wildfire – Neipa`.
      - На Untappd назва в множині: `Wildfires` (`bid 6147841`). Без оверрайду — `fuzzy`. З оверрайдом — `exact`.
+   - `oso-brew-co-mesa-table-beer`:
+     - Назва на вітрині: `Oso Brew Co. – Mesa – Table Beer`.
+     - На Untappd сорт існує як `Mesa` (`bid 5292594`), але в локальній базі сервера відсутній. Запит `Oso Brew Co / Mesa` давав хибний `fuzzy` збіг на `Ménage À Trois` (`bid 5019595`, 4.09). Через оверрайд встановлено `skip: true`, повертаючи `skipReason: 'unparsed'`.
 
-4. **Поведінка карток без броварні:**
-   - Для гіпотетичної односегментної картки без відомої броварні (наприклад `Attikus Lager`):
-     - Запит до `POST /match` із `brewery: ''` повертає `matched_beer: null`.
-     - Позначення картки через `skip: true, skipReason: 'unparsed'` не виконує марний мережевий запит та рендерить користувачу жовтий бейдж-попередження «Не змогли розібрати цю картку» замість сірого/відсутнього бейджа.
+4. **Поведінка карток без броварні та неповноцінних назв:**
+   - Для односегментних карток без відомої броварні (`Attikus Lager`), позицій із пропущеними сегментами (`Garage – – IPA`, `– Soup – Hazy IPA`), назв, які після чищення об'єму виявляються порожніми (`Garage – 44cl – IPA`), або заголовків, що містять лише броварню (`Garage Beer Co.`, `La Quince Brewing Co.`):
+     - Адаптер маркує їх як `skip: true, skipReason: 'unparsed'`.
+     - Мережевий запит не виконується, користувач бачить попередження «Не змогли розібрати цю картку».
 
 ### Зміна
 
@@ -84,55 +91,70 @@ Spec-review: codex/gpt-6.1-sol @ 92e9526 (author: agy) — 2 findings: 2 fixed, 
   - `parseCards(root)`:
     - Читає заголовок через `extractOriginalTitle` (з `data-success_message` або `.woocommerce-loop-product__title`).
     - Перевіряє не-пиво: `isNonBeerName(rawTitle)` по всій назві, `ES_NON_BEER_BRAND_RE` по першому сегменту, категорії `Packs`/`Refrescos` та класи WooCommerce.
-    - Парсить назву за трьох- або двокомпонентною схемою `Brewery – Name – Style`.
+    - Перевіряє `SLUG_OVERRIDES` (якщо `override.skip === true`, віддає `skip: true, skipReason: 'unparsed'`).
+    - Парсить назву за трьох- або двокомпонентною схемою `Brewery – Name – Style` зі збереженням позицій.
     - Очищає кінцеві об'єми (`33cl`, `44cl`, `75cl`, `1l`) як з назви, так і зі стилю функцією `stripVolume`.
     - Для 2-сегментних назв поле `style` залишає `undefined`, захищаючи від підміни стилю категоріями магазину.
-    - Для односегментних назв шукає броварню в `KNOWN_BREWERIES` з обов'язковою межею слова.
-    - Якщо броварню чи назву визначити не вдалося (включно з пропущеними сегментами `Garage – – IPA`, `– Soup – Hazy IPA`, назвами, де після чищення об'єму сорт порожній `Garage – 44cl – IPA`, або заголовками лише з броварні `Garage Beer Co.`, `La Quince Brewing Co.`), віддає `skip: true, skipReason: 'unparsed'`.
+    - Для односегментних назв шукає броварню в `KNOWN_BREWERIES` з обов'язковою межею слова; якщо назва містить лише броварню — зупиняється.
+    - Якщо броварню чи назву визначити не вдалося, віддає `skip: true, skipReason: 'unparsed'`.
     - Застосовує `CANONICAL_BREWERIES` та `SLUG_OVERRIDES`.
 - Тести `extension/src/sites/bubblesbeers.test.ts`:
-  - 11 тестів, що покривають повний контракт: фікстура, захист від хибного не-пива, чищення об'ємів, межа слів, unparsed картки, збереження іспанського заголовка, колаборації та класи WooCommerce.
+  - 12 тестів, що покривають повний контракт: фікстура, захист від хибного не-пива, чищення об'ємів, межа слів, unparsed картки (включно з неповноцінними заголовками, чищенням об'єму та назвами лише з броварні), збереження іспанського заголовка, колаборації, класи WooCommerce та оверрайд Mesa.
 - Реєстрація та документація:
   - `registry.ts`, `manifest.config.ts`, `supported-shops.ts`, `spec.md`, `extension/CHANGELOG.md`, `docs/extension-install-{en,uk}.md`, `site/index.html` та перезняті скріншоти popup.
 
 ## Заявка → доказ
 
-Кожен запис у `CANONICAL_BREWERIES` та `SLUG_OVERRIDES` зв'язує конкретний товар магазину (`SKU` вітрини за назвою, слагом та етикеткою) з цільовим записом у базі Untappd (перевіреним через `POST https://beer-api.ysilvestrov-ai.uk/match`):
+Усі рядки побудовано з двох реальних джерел: фікстури `extension/tests/fixtures/bubblesbeers.html` та повного обходу вітрини `bubblesbeers.com` станом на 2026-11-26 (усі 4 сторінки `/shop/`, 40 SKU). Результати перевірено повторними запитами до `POST https://beer-api.ysilvestrov-ai.uk/match`:
 
-| Заявка (картка / override) | Свідчення з SKU магазину `bubblesbeers.com` | Доказ Untappd (`bid`) | Сила |
-|---|---|---|---|
-| `Cervezas Althaia / Barlovento` | Заголовок `Althaia – Barlovento – Smoked Imperial Stout` | `/match` `exact`, `bid 1903411` (rating 3.84) | `[проба]` |
-| `Cervezas Althaia / Mascarat` | Заголовок `Althaia – Mascarat – Black Rye IPA` | `/match` `exact`, `bid 2407179` (rating 3.82) | `[проба]` |
-| `Cervezas Althaia / Mediterranean IPA` | Заголовок `Althaia – Mediterranean IPA – American ipa` | `/match` `exact`, `bid 1032784` (rating 3.66) | `[проба]` |
-| `Attik Brewing / Smile` | Заголовок `Attik – Smile – West Coast IPA sin gluten` | `/match` `exact`, `bid 5740441` (rating 3.75) | `[проба]` |
-| `Attik Brewing / Zessie` | Заголовок `Attik – Zessie – Wild Ale Cereza` | `/match` `exact`, `bid 6487512` (rating 3.94) | `[проба]` |
-| `Basqueland Brewing / Imparable` | Бренд `Basqueland`, флагманська IPA вітрини | `/match` `exact`, `bid 801901` (rating 3.74) | `[проба]` |
-| `DEYA Brewing Company / Steady Rolling Man` | Бренд `Deya`, флагманська лінійка вітрини | `/match` `exact`, `bid 1202873` (rating 3.97) | `[проба]` |
-| `Garage Beer Co. / Lollies` | Заголовок `Garage – Lollies – Berliner weisse` | `/match` `exact`, `bid 6721018` (rating 3.79) | `[проба]` |
-| `Garage Beer Co. / Stef` | Заголовок `Garage – Stef – West Coast Pils` | `/match` `exact`, `bid 6721219` (rating 3.78) | `[проба]` |
-| `Garage Beer Co. / Viduka` | Заголовок `Garage – Viduka – New England Pale Ale` | `/match` `exact`, `bid 6721221` (rating 3.89) | `[проба]` |
-| `La Quince Brewing Co. / Mr. Bubbles` | Заголовок `La Quince – Mr. Bubbles – Czech Lager Sin Gluten` | `/match` `exact`, `bid 6196638` (rating 3.42) | `[проба]` |
-| `La Quince Brewing Co. / The Wonder Blade` | Заголовок `La Quince – The Wonder Blade – West Coast Pils` | `/match` `exact`, `bid 6701041` (rating 3.65) | `[проба]` |
-| `La Sitgetana Craftbeer / Maricel` | Заголовок `La Sitgetana – Maricel – American Pale ale` | `/match` `exact`, `bid 2329121` (rating 3.52) | `[проба]` |
-| `La Sitgetana Craftbeer / Ultra Citra` | Заголовок `La Sitgetana – Ultra Citra – Hoppy lager` | `/match` `exact`, `bid 6630520` (rating 3.74) | `[проба]` |
-| `Companyia Cervesera del Montseny / IPA` | Заголовок `Montseny – IPA – American IPA` | `/match` `exact`, `bid 199890` (rating 3.39) | `[проба]` |
-| `Octavo Arte / 1521` | Заголовок `Octavo Arte – 1521 – Porter sin gluten` | `/match` `exact`, `bid 1509054` (rating 3.64) | `[проба]` |
-| `Octavo Arte / Dumbo` | Заголовок `Octavo Arte – Dumbo – Hazy IPA` | `/match` `exact`, `bid 7318827` (rating 3.96) | `[проба]` |
-| `Octavo Arte / Magia Blanca` | Заголовок `Octavo Arte – Magia Blanca – Milkshake IPA` | `/match` `exact`, `bid 7662143` (rating 3.91) | `[проба]` |
-| `Octavo Arte / Ultra Ligera` | Заголовок `Octavo Arte – Ultra Ligera – Hazy Pale Ale` | `/match` `exact`, `bid 7662142` (rating 3.80) | `[проба]` |
-| `Oddity Brewing / Wildfires` (override) | Слаг `oddity-wildfires`, назва `Oddity – Wildfire – Neipa` | `/match` `exact`, `bid 6147841` (rating 3.86) | `[проба]` |
-| `Oso Brew Co / Ace High` | Заголовок `Oso Brew – Ace High – West Coast IPA` | `/match` `exact`, `bid 7659216` (rating 3.84) | `[проба]` |
-| `RIOAZUL / Flora` | Бренд `Rio Azul`, севільська броварня | `/match` `bid 1863675` (rating 3.58) | `[проба]` |
-| `La Quince Brewing Co. / A GIANT LEAP FOR AN APE!` (override) | Слаг `rio-azul-x-laquince-a-giant-leap-for-an-ape-...` | `/match` `exact`, `bid 7401043` (rating 3.80) | `[проба]` |
-| `Sáez & Son / TERP Fresh Press` (override) | Слаг `saez-son-saezsonf-fresh-press-te-rp-smoothiesour` | `/match` `exact`, `bid 7180590` (rating 3.94) | `[проба]` |
-| `Sáez & Son / TERP Golden Hour` (override) | Слаг `saez-son-golden-hour-terp-smoothie-sour` | `/match` `exact`, `bid 7180377` (rating 3.88) | `[проба]` |
-| `FELIPPA BREW CO by Sáez & Son / FELIPPA` (override) | Слаг `saezson-felippa-west-coast-ipa` | `/match` `exact`, `bid 6833796` (rating 3.81) | `[проба]` |
-| `Cervezas Yakka / German Pils` | Заголовок `Yakka – German Pils` | Захист від хибного збігу на Amundsen Brewery | `[проба]` |
-| `Cervezas Alhambra / Reserva 1925` | Бренд `Alhambra`, іспанська класика | `/match` `exact`, `bid 40173` (rating 3.29) | `[проба]` |
+| Товар на вітрині / Заголовок | Що надсилає адаптер | Відповідь `/match` (`source`, `bid`, сорт, рейтинг) | Джерело | Сила |
+|---|---|---|---|---|
+| `Althaia – Barlovento – Smoked Imperial Stout` | `Cervezas Althaia` / `Barlovento` | `exact`, `bid 1903411` (Cervezas Althaia — Barlovento, rating 3.82) | Фікстура | `[проба]` |
+| `Althaia – Mascarat – Black Rye IPA` | `Cervezas Althaia` / `Mascarat` | `exact`, `bid 2407179` (Cervezas Althaia — Mascarat, rating 3.57) | Фікстура | `[проба]` |
+| `Althaia – Mediterranean IPA – American ipa` | `Cervezas Althaia` / `Mediterranean IPA` | `exact`, `bid 1032784` (Cervezas Althaia — Mediterranean IPA, rating 3.59) | Фікстура | `[проба]` |
+| `Althaia – Mediterranean Tostada Sin Alcohol` | `Cervezas Althaia` / `Mediterranean Tostada Sin Alcohol` | `null` (сорт відсутній у каталозі сервера) | Фікстура | `[проба]` |
+| `Attik – Smile – West Coast IPA sin gluten` | `Attik Brewing` / `Smile` | `null` (сорт відсутній у каталозі сервера) | Фікстура | `[проба]` |
+| `Attik – Zessie – Wild Ale Cereza` | `Attik Brewing` / `Zessie` | `exact`, `bid 6487512` (Attik Brewing — Zessie, rating 3.94) | Фікстура | `[проба]` |
+| `Garage – Lollies – Berliner weisse` | `Garage Beer Co.` / `Lollies` | `exact`, `bid 6721018` (Garage Beer Co. — Lollies, rating 3.72) | Фікстура | `[проба]` |
+| `Garage – Stef – West Coast Pils` | `Garage Beer Co.` / `Stef` | `exact`, `bid 6721219` (Garage Beer Co. — Stef, rating 3.74) | Фікстура | `[проба]` |
+| `Garage – Viduka – New England Pale Ale` | `Garage Beer Co.` / `Viduka` | `exact`, `bid 6784631` (Garage Beer Co. — Viduka, rating 3.8) | Фікстура | `[проба]` |
+| `La Quince – Mr. Bubbles – Czech Lager Sin Gluten` | `La Quince Brewing Co.` / `Mr. Bubbles` | `exact`, `bid 6196638` (La Quince Brewing Co. — Mr. Bubbles, rating 3.56) | Фікстура | `[проба]` |
+| `La Quince – The Wonder Blade – West Coast Pils – Sin gluten` | `La Quince Brewing Co.` / `The Wonder Blade` | `null` (сорт відсутній у каталозі сервера) | Фікстура | `[проба]` |
+| `La Sitgetana – Maricel – American Pale ale` | `La Sitgetana Craftbeer` / `Maricel` | `exact`, `bid 2329121` (La Sitgetana Craftbeer — Maricel, rating 3.57) | Каталог (2026-11-26) | `[проба]` |
+| `La Sitgetana – Ultra Citra – Hoppy lager` | `La Sitgetana Craftbeer` / `Ultra Citra` | `exact`, `bid 6630520` (La Sitgetana Craftbeer — Ultra Citra, rating 3.74) | Каталог (2026-11-26) | `[проба]` |
+| `Montseny – IPA – American IPA` | `Companyia Cervesera del Montseny` / `IPA` | `exact`, `bid 199890` (Companyia Cervesera del Montseny — IPA, rating 3.49) | Каталог (2026-11-26) | `[проба]` |
+| `Octavo Arte – 1521 – Porter sin gluten` | `Octavo Arte` / `1521` | `exact`, `bid 1509054` (Octavo Arte — 1521, rating 3.63) | Каталог (2026-11-26) | `[проба]` |
+| `Octavo Arte – Dumbo – Hazy IPA` | `Octavo Arte` / `Dumbo` | `exact`, `bid 7318827` (Octavo Arte — Dumbo, rating 3.88) | Каталог (2026-11-26) | `[проба]` |
+| `Octavo Arte – Magia Blanca – Milkshake IPA` | `Octavo Arte` / `Magia Blanca` | `exact`, `bid 7662143` (Octavo Arte — Magia Blanca, rating 3.97) | Каталог (2026-11-26) | `[проба]` |
+| `Octavo Arte – Ultra Ligera – Hazy Pale Ale` | `Octavo Arte` / `Ultra Ligera` | `exact`, `bid 7662142` (Octavo Arte — Ultra Ligera, без рейтингу) | Каталог (2026-11-26) | `[проба]` |
+| `Oddity – Wildfire – Neipa` | `Oddity Brewing` / `Wildfires` | `exact`, `bid 6147841` (Oddity Brewing — Wildfires, rating 3.8) | Каталог (2026-11-26) | `[проба]` |
+| `Oso Brew – Ace High – West Coast IPA` | `Oso Brew Co` / `Ace High` | `exact`, `bid 7659216` (Oso Brew Co — Ace High, rating 3.76) | Каталог (2026-11-26) | `[проба]` |
+| `Oso brew – Badlands – West Coast IPA` | `Oso Brew Co` / `Badlands` | `exact`, `bid 6819953` (Oso Brew Co — Badlands, rating 3.69) | Каталог (2026-11-26) | `[проба]` |
+| `Oso Brew – Evermore – NEIPA` | `Oso Brew Co` / `Evermore` | `exact`, `bid 7659219` (Oso Brew Co — Evermore, rating 4.02) | Каталог (2026-11-26) | `[проба]` |
+| `Oso Brew – Win Win – NEIPA` | `Oso Brew Co` / `Win Win` | `exact`, `bid 7659218` (Oso Brew Co — Win Win, rating 3.9) | Каталог (2026-11-26) | `[проба]` |
+| `Oso Brew Co x Hops Company – Happy Days – NEIPA` | `Oso Brew Co` / `Happy Days` | `exact`, `bid 7659220` (Oso Brew Co — Happy Days, rating 3.87) | Каталог (2026-11-26) | `[проба]` |
+| `Oso Brew Co. – Far Out –  NZ Pale Ale` | `Oso Brew Co` / `Far Out` | `exact`, `bid 6819950` (Oso Brew Co — Far Out, rating 3.71) | Каталог (2026-11-26) | `[проба]` |
+| `Oso Brew Co. – Mesa – Table Beer` | — (не надсилається) | `skipReason: 'unparsed'` (свідомо пропущено для уникнення хибного бейджа) | Каталог (2026-11-26) | `[проба]` |
+| `Oso Brew X Pühaste – Choc-a-bloc – Imperial Stout` | `Oso Brew Co` / `Choc-a-bloc` | `exact`, `bid 7659224` (Oso Brew Co — Choc-a-bloc, rating 4.14) | Каталог (2026-11-26) | `[проба]` |
+| `Río Azul – Highway Dreams – West Coast IPA` | `RIOAZUL` / `Highway Dreams` | `exact`, `bid 7218719` (RIOAZUL — Highway Dreams, rating 3.77) | Каталог (2026-11-26) | `[проба]` |
+| `Rio Azul x LaQuince –  A giant leap for an ape – Tiramisu patry stout` | `La Quince Brewing Co.` / `A GIANT LEAP FOR AN APE!` | `exact`, `bid 7401043` (La Quince Brewing Co. — A GIANT LEAP FOR AN APE!, rating 3.8) | Каталог (2026-11-26) | `[проба]` |
+| `Sáez & Son – Fresh Press – Terp Smoothie Sour` | `Sáez & Son` / `TERP Fresh Press` | `exact`, `bid 7180590` (Sáez & Son — TERP Fresh Press, rating 4.12) | Каталог (2026-11-26) | `[проба]` |
+| `Sáez & Son – Golden Hour – Terp Smoothie Sour` | `Sáez & Son` / `TERP Golden Hour` | `exact`, `bid 7180377` (Sáez & Son — TERP Golden Hour, rating 4.23) | Каталог (2026-11-26) | `[проба]` |
+| `Saez&Son  – Mistbound – Doble Hazy IPA` | `Sáez & Son` / `Mistbound` | `exact`, `bid 7180150` (Sáez & Son — Mistbound, rating 4.01) | Каталог (2026-11-26) | `[проба]` |
+| `Saez&Son – Felippa – West Coast IPA` | `FELIPPA BREW CO by Sáez & Son` / `FELIPPA` | `exact`, `bid 6833796` (FELIPPA BREW CO by Sáez & Son — FELIPPA, rating 3.82) | Каталог (2026-11-26) | `[проба]` |
+| `Sáez&Son – No Reason – Hazy IPA` | `Sáez & Son` / `No Reason` | `exact`, `bid 7180237` (Sáez & Son — No Reason, rating 4.1) | Каталог (2026-11-26) | `[проба]` |
+| `Yakka – Blonde – Belgian blonde` | `Cervezas Yakka` / `Blonde` | `exact`, `bid 5310076` (Cervezas Yakka — Blonde, rating 3.44) | Каталог (2026-11-26) | `[проба]` |
+| `Yakka -Triple – Belgian tripel` | `Cervezas Yakka` / `Triple` | `exact`, `bid 5640820` (Cervezas Yakka — Triple, rating 3.63) | Каталог (2026-11-26) | `[проба]` |
+| `Yakka Querida Ipa` | `Cervezas Yakka` / `Querida Ipa` | `null` (сорт відсутній у каталозі сервера) | Каталог (2026-11-26) | `[проба]` |
+| `Althaia – Batiscafo – Imperial Stout con cacao` | `Cervezas Althaia` / `Batiscafo` | `exact`, `bid 4048612` (Cervezas Althaia — Batiscafo, rating 3.91) | Каталог (2026-11-26) | `[проба]` |
 
 ## Рев'ю спеки
 
 | # | Перевірка | Рішення | Причина / що змінено |
 |---|---|---|---|
 | 1 | [4] Доказ ідентичності двох сортів суперечливий (однаковий `bid 6630520` для Zessie та Ultra Citra) | Виправлено | Звірено через `POST /match`: для `Attik Brewing / Zessie` встановлено справжній `bid 6487512` (rating 3.94); `bid 6630520` належить `La Sitgetana Craftbeer / Ultra Citra`. |
-| 2 | [2] Проба вибірки не доводить заявлене покриття всього асортименту | Виправлено | Проведено повний обхід усіх 4 сторінок `/shop/` (40 унікальних товарів, дедуплікованих за посиланням): виявлено 33 пивні картки та 7 не-пивних; уточнено розподіл структур назв (32 трисегментні, 1 односегментна `Yakka`) та реальні результати `/match` (31 exact, 1 fuzzy, 1 null, 97.0% match rate). |
+| 2 | [2] Проба вибірки не доводить заявлене покриття всього асортименту | Виправлено | Проведено повний обхід усіх 4 сторінок `/shop/` та фікстури (45 унікальних товарів): виявлено 38 пивних позицій та 7 не-пивних; таблицю побудовано для кожної картки з реальними відповідями сервера. |
+| 3 | [1] П'ять рядків без джерела (Basqueland, Deya, Alhambra, Flora, German Pils) та Espiga | Виправлено | Усі записи словників, відсутні у фікстурі та живому каталозі (Basqueland, Deya, Alhambra, Espiga, Flora, German Pils), вилучено зі словників та таблиці. |
+| 4 | [2] Невідповідність bid у Viduka, Smile та The Wonder Blade | Виправлено | У таблицю внесено реальні відповіді живого сервера: Viduka має `bid 6784631`, а Smile та The Wonder Blade повертають чесний `null` (відсутні в базі сервера). |
+| 5 | [3] Хибний fuzzy-бейдж на картці `Oso Brew Co. – Mesa – Table Beer` | Виправлено | Сорт на Untappd має `bid 5292594`, але відсутній на сервері бота, через що сервер повертав `Ménage À Trois` (`bid 5019595`). Додано оверрайд у `SLUG_OVERRIDES` із `skip: true, skipReason: 'unparsed'`, що запобігає показу хибного бейджа. |
+| 6 | [4] Колаборації | Виправлено | Зафіксовано правило взяття першої броварні для звичайних колаб (`Happy Days`, `Choc-a-bloc`, обидві дають `exact`) та точковий оверрайд для `Rio Azul x La Quince` (`exact`, `bid 7401043`). |
