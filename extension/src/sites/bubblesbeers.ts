@@ -217,6 +217,9 @@ function parseTitleParts(rawTitle: string): { brewery: string; name: string; sty
         if (cleaned) {
           return { brewery: canonicalBrewery(b), name: cleaned };
         }
+        // Entire title matches a known brewery without a remaining beer name;
+        // stop immediately rather than allowing a shorter prefix to turn brewery suffixes into a name.
+        return { brewery: canonicalBrewery(b), name: '' };
       }
     }
   }

@@ -243,12 +243,14 @@ describe('bubblesbeers adapter', () => {
     }
   });
 
-  it('marks incomplete titles with missing segments or volume-only names as unparsed', () => {
+  it('marks incomplete titles with missing segments, volume-only names, or brewery-only titles as unparsed', () => {
     const unparsed = parse(`
       ${card('Garage – – IPA')}
       ${card('– Soup – Hazy IPA')}
       ${card('Garage – 44cl – IPA')}
       ${card('Althaia – ')}
+      ${card('Garage Beer Co.')}
+      ${card('La Quince Brewing Co.')}
     `);
 
     expect(
@@ -258,6 +260,8 @@ describe('bubblesbeers adapter', () => {
       { brewery: '', name: '– Soup – Hazy IPA', skip: true, skipReason: 'unparsed' },
       { brewery: '', name: 'Garage – 44cl – IPA', skip: true, skipReason: 'unparsed' },
       { brewery: '', name: 'Althaia –', skip: true, skipReason: 'unparsed' },
+      { brewery: '', name: 'Garage Beer Co.', skip: true, skipReason: 'unparsed' },
+      { brewery: '', name: 'La Quince Brewing Co.', skip: true, skipReason: 'unparsed' },
     ]);
   });
 });
